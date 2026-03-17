@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C 제어문 디버거</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-logo">C<span>Debug</span></div>
+  <div class="topbar-sep"></div>
+  <span class="topbar-label">FILE</span>
+  <span class="topbar-title" id="topTitle">control_flow.c</span>
+  <span class="topbar-badge" id="topBadge">STEP 0 / 0</span>
+  <div class="topbar-sep"></div>
+  <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환">
+    <span class="theme-toggle-icon" id="themeIcon">🌙</span>
+    <span id="themeLabel">다크</span>
+  </button>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">제어문 목록</div>
+    <div class="sidebar-scroll" id="sidebarScroll">
+      <!-- 동적 생성: debugger.js renderSidebar() -->
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-area">
+
+    <!-- TAB BAR -->
+    <div class="tab-bar" id="tabBar">
+      <div class="tab active" id="tabCode">
+        <div class="tab-dot" style="background:var(--accent-g)"></div>
+        <span id="tabCodeName">if_basic.c</span>
+      </div>
+    </div>
+
+    <!-- CONTENT SPLIT -->
+    <div class="content-split">
+
+      <!-- EDITOR -->
+      <div class="editor-pane">
+        <div class="pane-header">
+          <span class="pane-title">EDITOR — <span class="pane-title-accent" id="editorTitle">if / else 기본</span></span>
+        </div>
+        <div class="code-area" id="codeArea"></div>
+      </div>
+
+      <!-- RIGHT PANE -->
+      <div class="right-pane">
+
+        <!-- CONCEPT -->
+        <div class="info-panel">
+          <div class="info-panel-header">
+            <span class="info-panel-title">📖 개념</span>
+          </div>
+          <div class="info-panel-body">
+            <div class="concept-body" id="conceptBody">로드 중…</div>
+          </div>
+        </div>
+
+        <!-- EXPLAIN -->
+        <div class="info-panel">
+          <div class="info-panel-header">
+            <span class="info-panel-title">⚡ 현재 실행</span>
+            <span id="condBadge"></span>
+          </div>
+          <div class="info-panel-body" style="padding:0">
+            <div class="explain-box" id="explainBox">▶ Step 버튼을 눌러 실행을 시작하세요.</div>
+          </div>
+        </div>
+
+        <!-- MEMORY VISUALIZER -->
+        <div class="info-panel" id="memVizPanel">
+          <div class="info-panel-header">
+            <span class="info-panel-title">🗂 메모리 맵</span>
+            <span id="memVizByteLabel" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent-o);letter-spacing:0.5px"></span>
+          </div>
+          <div class="info-panel-body" style="padding:0">
+            <div class="stack-viz-wrap" id="stackVizArea">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);padding:8px">— Step 진행 시 표시 —</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- VARIABLES -->
+        <div class="info-panel">
+          <div class="info-panel-header">
+            <span class="info-panel-title">📦 변수 테이블</span>
+          </div>
+          <div class="info-panel-body" style="padding:0">
+            <div class="mem-scroll">
+              <table class="mem-tbl">
+                <thead>
+                  <tr><th>주소</th><th>변수</th><th>타입</th><th>값</th></tr>
+                </thead>
+                <tbody id="memTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- OUTPUT -->
+        <div class="info-panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column;border-bottom:none">
+          <div class="info-panel-header" style="flex-shrink:0">
+            <span class="info-panel-title">🖨 출력</span>
+            <button onclick="clearOutput()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-family:'JetBrains Mono',monospace">CLEAR</button>
+          </div>
+          <div class="output-scroll" id="outputArea"><span class="output-dim">// 실행 결과가 여기 표시됩니다</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CONTROL BAR -->
+    <div class="control-bar">
+      <button class="ctrl-btn" onclick="resetDebug()" title="처음부터">⟳ 리셋</button>
+      <div class="ctrl-sep"></div>
+      <button class="ctrl-btn primary" id="btnStep" onclick="stepForward()">▶ Step →</button>
+      <button class="ctrl-btn success" id="btnRun" onclick="runAll()">⚡ 전체 실행</button>
+      <div class="ctrl-sep"></div>
+      <button class="ctrl-btn" id="btnPrev" onclick="stepBack()" disabled>← 이전</button>
+      <div class="step-counter">STEP <span id="stepNum">0</span> / <span id="stepTotal">0</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="topics.js"></script>
+<script src="debugger.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+---
+description: C Debugger 프로젝트 개요 및 코드 구조
+alwaysApply: true
+---
+
+# C Debugger — 프로젝트 개요
+
+학습용 C 제어문 디버거 웹 페이지. C 언어 제어문(조건문, 반복문, 점프문)과 메모리 개념을 **스텝별 시각화**로 학습할 수 있음.
+
+## 파일 구조
+
+```
+c_debugger/
+├── src/
+│   └── sample/
+│       ├── index.html
+│       ├── styles.css
+│       ├── debugger.js
+│       └── topics.js
+├── build.js
+├── c_debugger.html
+└── .cursor/
+```
+
+| 경로 | 역할 |
+|------|------|
+| `src/sample/index.html` | 메인 진입점 |
+| `src/sample/debugger.js` | 핵심 로직: 상태, 렌더링, Step |
+| `src/sample/topics.js` | 토픽 데이터 (code, steps, concept) |
+| `src/sample/styles.css` | UI 스타일 (다크/라이트) |
+| `build.js` | src/sample → c_debugger.html 번들 |
+| `c_debugger.html` | 단일 파일 배포용 (`node build.js`) |
+
+## 아키텍처
+
+- **Vanilla HTML/CSS/JS** — 빌드 도구 없음
+- **데이터 주도**: `TOPICS` 객체가 모든 토픽·스텝 정의
+- **상태**: `currentTopic`, `stepIndex`, `varState`, `outputLines`
+
+## 주요 UI 패널
+
+1. **사이드바**: 토픽 목록 (조건문, 반복문, 점프문, 메모리 관리)
+2. **에디터**: C 코드 라인별 하이라이트 (exec/skip/next)
+3. **개념**: 설명 HTML
+4. **현재 실행**: Step별 설명
+5. **메모리 맵**: 스택/힙 시각화
+6. **변수 테이블**: 주소, 타입, 값
+7. **출력**: printf 시뮬레이션 결과
+
+## 키보드 단축키
+
+- `→` / `n`: 다음 Step
+- `←` / `p`: 이전 Step
+- `r`: 리셋
+
+## 스타일
+
+- CSS 변수: `--accent`, `--accent-g`, `--accent-r`, `--text`, `--panel` 등
+- 폰트: JetBrains Mono, Noto Sans KR

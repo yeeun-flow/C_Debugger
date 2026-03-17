@@ -1,0 +1,43 @@
+---
+description: debugger.js 핵심 로직 및 수정 시 유의사항
+globs: debugger.js
+alwaysApply: false
+---
+
+# debugger.js 로직
+
+## 상태 변수
+
+- `currentTopic`: 현재 선택된 토픽 키
+- `stepIndex`: 0-based, 다음에 실행할 스텝 인덱스
+- `varState`: `{ 변수명: { val, changed } }`
+- `outputLines`: 출력 히스토리
+
+## 핵심 함수
+
+| 함수 | 역할 |
+|------|------|
+| `renderCode(topic, activeLineId, type)` | 코드 영역 렌더, activeLineId에 exec/skip/next 하이라이트 |
+| `renderMemTable(topic, newVars)` | 변수 테이블. newVars 병합 후 changed 플래그 |
+| `renderStackViz(memViz)` | 스택/힙 시각화. stack, heap, ptrLinks 처리 |
+| `stepForward()` | stepIndex++, output 누적, updateUI |
+| `stepBack()` | stepIndex--, output/varState 재계산 |
+| `updateUI()` | stepIndex 기준으로 전체 UI 동기화 |
+
+## Step 타입별 하이라이트
+
+- `exec`: 녹색 (실행됨)
+- `skip`: 빨간색 (건너뜀)
+- `null`: 기본 (다음 실행 예정)
+
+## 메모리 시각화
+
+- `renderStackViz`: stack은 column-reverse (아래→위 성장)
+- heap 블록: `freed: true` 시 회색 처리
+- `ptrLinks`: 스택→힙/스택 포인터 화살표
+- `escHtml()` 사용 필수 — XSS 방지
+
+## 사이드바 연동
+
+`index.html`의 `data-topic`과 `onclick="selectTopic('...')"`가 토픽 키와 매칭됨.
+새 토픽 추가 시 HTML에도 항목 추가 필요.

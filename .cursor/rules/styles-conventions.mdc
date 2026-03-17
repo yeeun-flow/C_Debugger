@@ -1,0 +1,43 @@
+---
+description: styles.css 스타일 규칙 및 CSS 변수
+globs: styles.css
+alwaysApply: false
+---
+
+# 스타일 규칙
+
+## CSS 변수 (styles.css :root)
+
+| 변수 | 용도 |
+|------|------|
+| `--bg`, `--bg2`, `--bg3` | 배경 계층 |
+| `--sidebar`, `--panel`, `--panel2` | 패널 배경 |
+| `--border`, `--border2` | 테두리 |
+| `--accent` | 기본 강조 (파랑) |
+| `--accent-g` | 성공/실행 (녹색) |
+| `--accent-r` | 경고/건너뜀 (빨강) |
+| `--accent-y` | 변수/강조 (노랑) |
+| `--accent-p` | 보조 (보라) |
+| `--accent-o` | 힙/바이트 (주황) |
+| `--text`, `--text2`, `--text3` | 텍스트 계층 |
+| `--hl-exec`, `--hl-skip`, `--hl-line` | 코드 하이라이트 |
+
+## 코드 문법 색상
+
+- `--kw`: 키워드 (if, for, return)
+- `--ty`: 타입 (int)
+- `--st`: 문자열
+- `--nm`: 숫자
+- `--cm`: 주석
+- `--fn`, `--vr`, `--pp`: 함수, 변수, 전처리기
+
+## 폰트
+
+- `JetBrains Mono`: 코드, 주소, 테이블
+- `Noto Sans KR`: UI 텍스트
+
+## 새 스타일 추가 시
+
+- 기존 변수 재사용 우선
+- `rgba(91,156,246,0.12)` 형태로 accent + opacity 조합
+- `font-family: 'JetBrains Mono', monospace` 코드/숫자용
