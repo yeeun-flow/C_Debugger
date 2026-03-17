@@ -1,0 +1,16 @@
+---
+description: CH06 topic scenarios — keep in sync with real C code
+alwaysApply: false
+---
+
+# CH06 topic scenarios
+
+- **Source of truth**: `src/chapter06/source06/*.c` C files.
+- When editing CH06 `topics.js`, always mirror the real C code:
+  - `code`: same lines/order as the C file (only HTML escape/markup allowed).
+  - `steps`: show a concrete input scenario (printf → scanf → 조건 → 출력 → return).
+- Keep `varTypes` / `vars` / `memViz` consistent with each other and with the C code.
+- The final `return` step should represent stack/heap cleared (`memViz.stack = []`, `memViz.heap = []`).
+- When adding a new topic, add it to `TOPIC_META` + `TOPICS` together, and verify that outputs/branches match the actual program run.
+
+

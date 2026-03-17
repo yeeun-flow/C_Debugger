@@ -220,7 +220,11 @@ function renderStackViz(memViz) {
         <div class="mem-cell-name">${escHtml(v.name)}</div>
         <div class="mem-cell-bytes">`;
       hexBytes.forEach((h, i) => {
-        html += `<span class="mem-byte" title="${escHtml(v.name)} byte ${i}">${escHtml(h)}</span>`;
+        const isUnknown = h === '??';
+        const title = isUnknown
+          ? `${escHtml(v.name)} byte ${i} — 미초기화(쓰레기 값)`
+          : `${escHtml(v.name)} byte ${i} = 0x${h}`;
+        html += `<span class="mem-byte" title="${title}">${escHtml(h)}</span>`;
       });
       html += `</div>
         <div class="mem-cell-val">${escHtml(String(v.val))}</div>
@@ -386,7 +390,13 @@ function updateUI() {
     $(IDS.condBadge).innerHTML = '';
   }
 
-  renderMemTable(state.currentTopic, step.vars || null);
+  // return 이후 스택이 완전히 비워진 step이면 변수 테이블도 비웁니다.
+  if (step.memViz && step.memViz.stack && step.memViz.stack.length === 0 && (!step.memViz.heap || step.memViz.heap.length === 0)) {
+    state.varState = {};
+    renderMemTable(state.currentTopic, null);
+  } else {
+    renderMemTable(state.currentTopic, step.vars || null);
+  }
   if (step.memViz !== undefined) {
     const memViz = step.memViz || null;
     const memChanged = !_memVizEqual(memViz, state.lastMemViz);
@@ -452,7 +462,13 @@ function runAll() {
   }
   renderOutput(state.outputLines, '// 출력 없음');
   state.lastMemViz = lastMemViz;
-  if (lastMemViz) renderStackViz(lastMemViz);
+  if (lastMemViz) {
+    renderStackViz(lastMemViz);
+    if (lastMemViz.stack && lastMemViz.stack.length === 0 && (!lastMemViz.heap || lastMemViz.heap.length === 0)) {
+      state.varState = {};
+      renderMemTable(state.currentTopic, null);
+    }
+  }
   updateUI();
 }
 
