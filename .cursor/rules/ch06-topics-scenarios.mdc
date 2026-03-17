@@ -12,5 +12,9 @@ alwaysApply: false
 - Keep `varTypes` / `vars` / `memViz` consistent with each other and with the C code.
 - The final `return` step should represent stack/heap cleared (`memViz.stack = []`, `memViz.heap = []`).
 - When adding a new topic, add it to `TOPIC_META` + `TOPICS` together, and verify that outputs/branches match the actual program run.
+  - Always open the corresponding `src/chapter06/source06/*.c` file and cross-check before finalizing a scenario:
+    - Control-flow/branches are identical.
+    - The assumed input values actually lead to that branch in the real C program.
+    - All `printf` output strings (content/format) exactly match the C source.
 
 

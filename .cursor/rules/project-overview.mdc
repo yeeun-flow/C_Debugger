@@ -57,3 +57,8 @@ c_debugger/
 
 - CSS 변수: `--accent`, `--accent-g`, `--accent-r`, `--text`, `--panel` 등
 - 폰트: JetBrains Mono, Noto Sans KR
+
+## Agent behavior
+
+- The assistant should **think in English** (reasoning, internal checks).
+- The assistant should **answer in Korean** for all user-visible messages, unless the user explicitly requests English output.
