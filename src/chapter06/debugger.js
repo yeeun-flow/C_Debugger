@@ -390,13 +390,10 @@ function updateUI() {
     $(IDS.condBadge).innerHTML = '';
   }
 
-  // return 이후 스택이 완전히 비워진 step이면 변수 테이블도 비웁니다.
-  if (step.memViz && step.memViz.stack && step.memViz.stack.length === 0 && (!step.memViz.heap || step.memViz.heap.length === 0)) {
-    state.varState = {};
-    renderMemTable(state.currentTopic, null);
-  } else {
-    renderMemTable(state.currentTopic, step.vars || null);
-  }
+  // 기본적으로 vars 기준으로 변수 테이블 업데이트
+  renderMemTable(state.currentTopic, step.vars || null);
+
+  // memViz가 있는 토픽: memViz 변화에 따라 스택/힙 뷰 업데이트
   if (step.memViz !== undefined) {
     const memViz = step.memViz || null;
     const memChanged = !_memVizEqual(memViz, state.lastMemViz);
@@ -404,6 +401,17 @@ function updateUI() {
       state.lastMemViz = memViz;
       renderStackViz(memViz);
     }
+
+    // memViz 기준으로 스택/힙이 완전히 비워졌다면 변수 테이블도 비움
+    if (memViz && memViz.stack && memViz.stack.length === 0 && (!memViz.heap || memViz.heap.length === 0)) {
+      state.varState = {};
+      renderMemTable(state.currentTopic, null);
+    }
+  } else if (state.stepIndex === total) {
+    // memViz를 사용하지 않는 토픽(CH06 등)에서는 마지막 step에서 변수/메모리 뷰를 초기화
+    state.varState = {};
+    renderMemTable(state.currentTopic, null);
+    renderStackViz(null);
   }
 }
 
