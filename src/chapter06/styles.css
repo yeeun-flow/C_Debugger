@@ -357,6 +357,7 @@ body {
 }
 .resizer-h:hover { height: 6px; margin: 2px 0; }
 
+/* ═══ RESIZABLE PANELS ═══ */
 .resizable-panel {
   flex-shrink: 0;
   overflow: hidden;
@@ -369,13 +370,14 @@ body {
   min-height: 0;
 }
 
-/* ═══ EDITOR PANE ═══ */
 .editor-pane {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
   overflow: hidden;
 }
+
+/* ═══ EDITOR PANE ═══ */
 .pane-header {
   height: 32px;
   background: var(--bg2);
@@ -479,6 +481,8 @@ body {
 .call-badge.exec { background: rgba(67,217,173,0.2); color: var(--accent-g); }
 .call-badge.skip { background: rgba(244,112,103,0.2); color: var(--accent-r); }
 .call-badge.next { background: rgba(91,156,246,0.2); color: var(--accent); }
+
+/* ═══ RIGHT PANE (extends above) ═══ */
 
 /* ═══ INFO PANELS ═══ */
 .info-panel {

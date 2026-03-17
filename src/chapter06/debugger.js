@@ -28,11 +28,11 @@ const IDS = {
 //  STATE
 // ══════════════════════════════════════════════════════════
 const state = {
-  currentTopic: 'if_basic',
+  currentTopic: 'basicif',
   stepIndex: 0,
   outputLines: [],
   varState: {},
-  lastMemViz: null,
+  lastMemViz: null,  // 이전 스텝 메모리 (동일 시 업데이트 생략)
 };
 
 // ══════════════════════════════════════════════════════════
@@ -205,7 +205,7 @@ function renderStackViz(memViz) {
 
   let html = '';
 
-  // ── 메모리맵 시각화 (스택 변수) ─────────────────────────
+  // ── 메모리맵 시각화 (스택 변수, 위로 쌓임 = 최신이 위) ───
   const allVars = stack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
   if (allVars.length > 0) {
     html += `<div class="mem-map-col">
@@ -567,10 +567,11 @@ function toggleTheme() {
 const RESIZE_KEYS = { rightPane: 'cdebugger-right-pane-width', panelHeights: 'cdebugger-panel-heights' };
 
 function initResize() {
+  const split = document.getElementById('contentSplit');
   const rightPane = document.getElementById('rightPane');
   const resizerV = document.getElementById('resizerV');
-  if (!rightPane || !resizerV) return;
 
+  // 우측 패널 너비 (에디터 ↔ 우측)
   let rpWidth = parseInt(localStorage.getItem(RESIZE_KEYS.rightPane) || '380', 10);
   rpWidth = Math.max(280, Math.min(600, rpWidth));
   rightPane.style.setProperty('--right-pane-width', rpWidth + 'px');
@@ -580,9 +581,11 @@ function initResize() {
     resizerV.classList.add('active');
     const startX = e.clientX;
     const startW = rightPane.offsetWidth;
+
     function onMove(e) {
       const dx = startX - e.clientX;
-      let w = Math.max(280, Math.min(600, startW + dx));
+      let w = startW + dx;
+      w = Math.max(280, Math.min(600, w));
       rightPane.style.setProperty('--right-pane-width', w + 'px');
     }
     function onUp() {
@@ -593,14 +596,17 @@ function initResize() {
       document.body.style.cursor = '';
       localStorage.setItem(RESIZE_KEYS.rightPane, String(rightPane.offsetWidth));
     }
+
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
 
+  // 패널 높이 (개념, 현재 실행, 메모리맵, 변수 테이블)
   const saved = JSON.parse(localStorage.getItem(RESIZE_KEYS.panelHeights) || '{}');
   const panels = ['panelConcept', 'panelExplain', 'panelMemViz', 'panelVars'];
+
   panels.forEach(id => {
     const panel = document.getElementById(id);
     if (!panel) return;
@@ -623,9 +629,11 @@ function initResize() {
       const min = parseInt(panel.dataset.min || '60', 10);
       const startY = e.clientY;
       const startH = panel.offsetHeight;
+
       function onMove(e) {
         const dy = e.clientY - startY;
-        panel.style.height = Math.max(min, startH + dy) + 'px';
+        let h = Math.max(min, startH + dy);
+        panel.style.height = h + 'px';
       }
       function onUp() {
         resizer.classList.remove('active');
@@ -640,6 +648,7 @@ function initResize() {
         });
         localStorage.setItem(RESIZE_KEYS.panelHeights, JSON.stringify(saved));
       }
+
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'row-resize';
       document.addEventListener('mousemove', onMove);
@@ -654,7 +663,9 @@ function initResize() {
 setTheme(getTheme());
 initResize();
 renderSidebar();
-selectTopic('if_basic');
+selectTopic('basicif');
+renderSidebar();
+selectTopic('basicif');
 
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;

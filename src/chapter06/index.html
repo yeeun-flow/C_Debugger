@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>C 제어문 디버거</title>
+<title>C 6장 - 제어문 (조건 선택)</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,8 +13,8 @@
 <div class="topbar">
   <div class="topbar-logo">C<span>Debug</span></div>
   <div class="topbar-sep"></div>
-  <span class="topbar-label">FILE</span>
-  <span class="topbar-title" id="topTitle">control_flow.c</span>
+  <span class="topbar-label">CH06</span>
+  <span class="topbar-title" id="topTitle">01basicif.c</span>
   <span class="topbar-badge" id="topBadge">STEP 0 / 0</span>
   <div class="topbar-sep"></div>
   <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환">
@@ -27,7 +27,7 @@
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
-    <div class="sidebar-header">제어문 목록</div>
+    <div class="sidebar-header">6장 — 조건 선택 (if / switch)</div>
     <div class="sidebar-scroll" id="sidebarScroll">
       <!-- 동적 생성: debugger.js renderSidebar() -->
     </div>
@@ -40,7 +40,7 @@
     <div class="tab-bar" id="tabBar">
       <div class="tab active" id="tabCode">
         <div class="tab-dot" style="background:var(--accent-g)"></div>
-        <span id="tabCodeName">if_basic.c</span>
+        <span id="tabCodeName">01basicif.c</span>
       </div>
     </div>
 
@@ -50,16 +50,18 @@
       <!-- EDITOR -->
       <div class="editor-pane">
         <div class="pane-header">
-          <span class="pane-title">EDITOR — <span class="pane-title-accent" id="editorTitle">if / else 기본</span></span>
+          <span class="pane-title">EDITOR — <span class="pane-title-accent" id="editorTitle">if 문 (폭염 주의보)</span></span>
         </div>
         <div class="code-area" id="codeArea"></div>
       </div>
 
+      <!-- VERTICAL RESIZER (에디터 ↔ 우측 패널) -->
       <div class="resizer resizer-v" id="resizerV" title="드래그하여 너비 조절"></div>
 
       <!-- RIGHT PANE -->
       <div class="right-pane" id="rightPane">
 
+        <!-- CONCEPT -->
         <div class="info-panel resizable-panel" id="panelConcept" data-min="80" data-default="120">
           <div class="info-panel-header">
             <span class="info-panel-title">📖 개념</span>
@@ -70,6 +72,7 @@
         </div>
         <div class="resizer resizer-h" data-resize="panelConcept" title="드래그하여 높이 조절"></div>
 
+        <!-- EXPLAIN -->
         <div class="info-panel resizable-panel" id="panelExplain" data-min="60" data-default="100">
           <div class="info-panel-header">
             <span class="info-panel-title">⚡ 현재 실행</span>
@@ -81,6 +84,7 @@
         </div>
         <div class="resizer resizer-h" data-resize="panelExplain" title="드래그하여 높이 조절"></div>
 
+        <!-- MEMORY VISUALIZER -->
         <div class="info-panel resizable-panel" id="panelMemViz" data-min="80" data-default="180">
           <div class="info-panel-header">
             <span class="info-panel-title">🗂 메모리 맵</span>
@@ -94,6 +98,7 @@
         </div>
         <div class="resizer resizer-h" data-resize="panelMemViz" title="드래그하여 높이 조절"></div>
 
+        <!-- VARIABLES -->
         <div class="info-panel resizable-panel" id="panelVars" data-min="60" data-default="120">
           <div class="info-panel-header">
             <span class="info-panel-title">📦 변수 테이블</span>
