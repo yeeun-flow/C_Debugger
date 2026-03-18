@@ -35,6 +35,20 @@ const state = {
   lastMemViz: null,  // 이전 스텝 메모리 (동일 시 업데이트 생략)
 };
 
+// 타입 메타데이터: 바이트 수, 표시용 타입 이름 등
+const TYPE_META = {
+  int:    { bytes: 4,  display: 'int' },
+  double: { bytes: 8,  display: 'double' },
+};
+
+function getTypeBytes(type) {
+  if (!type) return 4;
+  if (TYPE_META[type]) return TYPE_META[type].bytes;
+  // 포인터 타입 등은 8바이트로 통일
+  if (type.includes('*')) return 8;
+  return 4;
+}
+
 // ══════════════════════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════════════════════
@@ -158,7 +172,7 @@ function clearOutput() {
 //  MEMORY MAP: 값 → 헥스 바이트 (리틀 엔디안)
 // ══════════════════════════════════════════════════════════
 function valToHexBytes(val, type, bytes) {
-  const b = bytes || (type && type.includes('*') ? 8 : type === 'double' ? 8 : 4);
+  const b = bytes || getTypeBytes(type);
   const empty = () => Array(b).fill('??');
   if (val === '???' || val === null || val === undefined) return empty();
   if (type === 'int' || type === 'int*') {
@@ -206,7 +220,30 @@ function renderStackViz(memViz) {
   let html = '';
 
   // ── 메모리맵 시각화 (스택 변수, 위로 쌓임 = 최신이 위) ───
-  const allVars = stack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
+  // 토픽 메타정보를 기반으로 주소/바이트를 자동 계산하고,
+  // 현재 varState 값으로 v.val을 보정한다.
+  const t = TOPICS[state.currentTopic];
+  const autoBase = t && t._autoBaseAddr ? t._autoBaseAddr : (t && t.baseAddr) || {};
+
+  const normalizedStack = stack.map(frame => {
+    const vars = frame.vars.map(v => {
+      const type = v.type || (t && t.varTypes && t.varTypes[v.name]) || 'int';
+      const addr = autoBase[v.name] || v.addr || '0x7fff????';
+      const bytes = v.bytes || getTypeBytes(type);
+      const inState = state.varState[v.name];
+      const val = inState ? inState.val : v.val;
+      return {
+        ...v,
+        type,
+        addr,
+        bytes,
+        val,
+      };
+    });
+    return { ...frame, vars };
+  });
+
+  const allVars = normalizedStack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
   if (allVars.length > 0) {
     html += `<div class="mem-map-col">
       <div class="mem-map-label">🗺 메모리 맵 <span class="mem-map-hint">(↑ 최신 위)</span></div>
@@ -243,7 +280,7 @@ function renderStackViz(memViz) {
   } else if (stack.length === 0) {
     html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);padding:8px;text-align:center">비어있음</div>`;
   } else {
-    stack.slice().reverse().forEach(frame => {
+    normalizedStack.slice().reverse().forEach(frame => {
       const headerCls = `frame-fn-${frame.color}`;
       const varBytes = frame.vars.reduce((a, v) => a + v.bytes, 0);
       const totalFrameBytes = varBytes + 8 + 8;
@@ -550,6 +587,23 @@ function selectTopic(topicKey) {
   });
 
   const t = TOPICS[topicKey];
+  // 토픽의 변수 타입 정보를 기반으로 자동 주소 맵을 생성한다.
+  // (기존 baseAddr가 있더라도 여기서 일관된 규칙으로 다시 계산)
+  if (t && t.varTypes) {
+    const names = Object.keys(t.varTypes);
+    // 기준 주소는 임의의 상수에서 시작 (교육용이므로 상대적 위치만 중요)
+    let base = 0x7fff5200;
+    const auto = {};
+    names.forEach((name, idx) => {
+      // 변수마다 위쪽(큰 주소)로 쌓이도록 오프셋을 더해감
+      const type = t.varTypes[name];
+      const bytes = getTypeBytes(type);
+      const addrVal = base + idx * bytes;
+      auto[name] = '0x' + addrVal.toString(16);
+    });
+    t._autoBaseAddr = auto;
+  }
+
   $(IDS.editorTitle).textContent = t.title;
   $(IDS.tabCodeName).textContent = t.name;
   $(IDS.topTitle).textContent = t.name;
