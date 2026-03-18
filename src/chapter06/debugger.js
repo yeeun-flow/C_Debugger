@@ -201,36 +201,18 @@ function valToHexBytes(val, type, bytes) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  STACK VISUALIZER RENDERER
+//  STACK VISUALIZER HELPERS
 // ══════════════════════════════════════════════════════════
-function renderStackViz(memViz) {
-  const area = $(IDS.stackVizArea);
-  const byteLabel = $(IDS.memVizByteLabel);
-
-  if (!memViz) {
-    area.innerHTML = '<span style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:var(--text3);padding:10px 12px;display:block">— Step을 진행하면 메모리 상태가 표시됩니다 —</span>';
-    byteLabel.textContent = '';
-    return;
-  }
-
-  const ptrLinks = memViz.ptrLinks || memViz.pointers || [];
-  const { stack = [], heap = [], totalBytes = 0, released } = memViz;
-  byteLabel.textContent = `${totalBytes}B`;
-
-  let html = '';
-
-  // ── 메모리맵 시각화 (스택 변수, 위로 쌓임 = 최신이 위) ───
-  // 토픽 메타정보를 기반으로 주소/바이트를 자동 계산하고,
-  // 현재 varState 값으로 v.val을 보정한다.
-  const t = TOPICS[state.currentTopic];
+function _buildNormalizedStackFrames(stack, topic, varState) {
+  const t = topic;
   const autoBase = t && t._autoBaseAddr ? t._autoBaseAddr : (t && t.baseAddr) || {};
 
-  const normalizedStack = stack.map(frame => {
+  return stack.map(frame => {
     const vars = frame.vars.map(v => {
       const type = v.type || (t && t.varTypes && t.varTypes[v.name]) || 'int';
       const addr = autoBase[v.name] || v.addr || '0x7fff????';
       const bytes = v.bytes || getTypeBytes(type);
-      const inState = state.varState[v.name];
+      const inState = varState[v.name];
       const val = inState ? inState.val : v.val;
       return {
         ...v,
@@ -242,42 +224,46 @@ function renderStackViz(memViz) {
     });
     return { ...frame, vars };
   });
+}
 
+function _renderMemMapColumn(normalizedStack) {
   const allVars = normalizedStack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
-  if (allVars.length > 0) {
-    html += `<div class="mem-map-col">
+  if (allVars.length === 0) return '';
+
+  let html = `<div class="mem-map-col">
       <div class="mem-map-label">🗺 메모리 맵 <span class="mem-map-hint">(↑ 최신 위)</span></div>
       <div class="mem-map-grid">`;
 
-    allVars.forEach(v => {
-      const hexBytes = valToHexBytes(v.val, v.type, v.bytes);
-      const hlCls = v.highlight ? 'mem-cell-row highlight-row' : 'mem-cell-row';
-      html += `<div class="${hlCls}">
+  allVars.forEach(v => {
+    const hexBytes = valToHexBytes(v.val, v.type, v.bytes);
+    const hlCls = v.highlight ? 'mem-cell-row highlight-row' : 'mem-cell-row';
+    html += `<div class="${hlCls}">
         <div class="mem-cell-addr">${escHtml(v.addr)}</div>
         <div class="mem-cell-name">${escHtml(v.name)}</div>
         <div class="mem-cell-bytes">`;
-      hexBytes.forEach((h, i) => {
-        const isUnknown = h === '??';
-        const title = isUnknown
-          ? `${escHtml(v.name)} byte ${i} — 미초기화(쓰레기 값)`
-          : `${escHtml(v.name)} byte ${i} = 0x${h}`;
-        html += `<span class="mem-byte" title="${title}">${escHtml(h)}</span>`;
-      });
-      html += `</div>
+    hexBytes.forEach((h, i) => {
+      const isUnknown = h === '??';
+      const title = isUnknown
+        ? `${escHtml(v.name)} byte ${i} — 미초기화(쓰레기 값)`
+        : `${escHtml(v.name)} byte ${i} = 0x${h}`;
+      html += `<span class="mem-byte" title="${title}">${escHtml(h)}</span>`;
+    });
+    html += `</div>
         <div class="mem-cell-val">${escHtml(String(v.val))}</div>
       </div>`;
-    });
+  });
 
-    html += `</div></div>`;
-  }
+  html += `</div></div>`;
+  return html;
+}
 
-  // ── STACK COLUMN ──
-  html += `<div class="stack-col">
+function _renderStackColumn(normalizedStack, heap) {
+  let html = `<div class="stack-col">
     <div class="stack-col-label">📦 STACK  (↓성장)</div>`;
 
-  if (stack.length === 0 && heap.length === 0) {
-    // empty state handled below
-  } else if (stack.length === 0) {
+  if (normalizedStack.length === 0 && (!heap || heap.length === 0)) {
+    // empty state는 상위에서 처리
+  } else if (normalizedStack.length === 0) {
     html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);padding:8px;text-align:center">비어있음</div>`;
   } else {
     normalizedStack.slice().reverse().forEach(frame => {
@@ -324,8 +310,13 @@ function renderStackViz(memViz) {
   }
 
   html += `</div>`;
+  return html;
+}
 
-  // ── POINTER CONNECTORS ──
+function _renderHeapAndPointers(heap, ptrLinks, released) {
+  let html = '';
+
+  // POINTER CONNECTORS
   if (heap.length > 0 && ptrLinks.length > 0) {
     html += `<div class="ptr-connector">`;
     ptrLinks.forEach(pl => {
@@ -344,7 +335,7 @@ function renderStackViz(memViz) {
     </div>`;
   }
 
-  // ── HEAP COLUMN ──
+  // HEAP COLUMN
   if (heap.length > 0) {
     html += `<div class="stack-col" style="min-width:130px">
       <div class="stack-col-label">🧱 HEAP  (↑성장)</div>`;
@@ -373,21 +364,52 @@ function renderStackViz(memViz) {
     html += `</div>`;
   }
 
-  // ── RELEASED NOTICE ──
+  // RELEASED NOTICE
   if (released) {
     html += `<div style="position:absolute;bottom:6px;left:10px;right:10px">
       <div class="released-banner">⬇ ${escHtml(released)}</div>
     </div>`;
   }
 
-  // ── EMPTY STATE ──
-  if (stack.length === 0 && heap.length === 0) {
-    html = `<div class="viz-empty">
+  return html;
+}
+
+// ══════════════════════════════════════════════════════════
+//  STACK VISUALIZER RENDERER
+// ══════════════════════════════════════════════════════════
+function renderStackViz(memViz) {
+  const area = $(IDS.stackVizArea);
+  const byteLabel = $(IDS.memVizByteLabel);
+
+  if (!memViz) {
+    area.innerHTML = '<span style="font-family:\'JetBrains Mono\',monospace;font-size:10px;color:var(--text3);padding:10px 12px;display:block">— Step을 진행하면 메모리 상태가 표시됩니다 —</span>';
+    byteLabel.textContent = '';
+    return;
+  }
+
+  const ptrLinks = memViz.ptrLinks || memViz.pointers || [];
+  const { stack = [], heap = [], totalBytes = 0, released } = memViz;
+  byteLabel.textContent = `${totalBytes}B`;
+
+  // 스택 프레임을 토픽 메타 + 현재 varState 기준으로 정규화
+  const t = TOPICS[state.currentTopic];
+  const normalizedStack = _buildNormalizedStackFrames(stack, t, state.varState);
+
+  // 스택/힙이 모두 비어있는 경우: 해제 완료 뷰
+  if (normalizedStack.length === 0 && heap.length === 0) {
+    area.style.position = 'relative';
+    area.innerHTML = `<div class="viz-empty">
       <span class="viz-empty-icon">✅</span>
       <span class="viz-empty-text">모든 메모리 해제됨</span>
       ${released ? `<span class="viz-empty-sub">${escHtml(released)}</span>` : ''}
     </div>`;
+    return;
   }
+
+  let html = '';
+  html += _renderMemMapColumn(normalizedStack);
+  html += _renderStackColumn(normalizedStack, heap);
+  html += _renderHeapAndPointers(heap, ptrLinks, released);
 
   area.style.position = 'relative';
   area.innerHTML = html;
@@ -644,14 +666,13 @@ function toggleTheme() {
 // ══════════════════════════════════════════════════════════
 const RESIZE_KEYS = { rightPane: 'cdebugger-right-pane-width', panelHeights: 'cdebugger-panel-heights' };
 
-function initResize() {
-  const split = document.getElementById('contentSplit');
-  const rightPane = document.getElementById('rightPane');
-  const resizerV = document.getElementById('resizerV');
+function initRightPaneResizer({ rightPaneId, resizerId, storageKey, minWidth, maxWidth }) {
+  const rightPane = document.getElementById(rightPaneId);
+  const resizerV = document.getElementById(resizerId);
+  if (!rightPane || !resizerV) return;
 
-  // 우측 패널 너비 (에디터 ↔ 우측)
-  let rpWidth = parseInt(localStorage.getItem(RESIZE_KEYS.rightPane) || '380', 10);
-  rpWidth = Math.max(280, Math.min(600, rpWidth));
+  let rpWidth = parseInt(localStorage.getItem(storageKey) || '380', 10);
+  rpWidth = Math.max(minWidth, Math.min(maxWidth, rpWidth));
   rightPane.style.setProperty('--right-pane-width', rpWidth + 'px');
 
   resizerV.addEventListener('mousedown', e => {
@@ -660,10 +681,10 @@ function initResize() {
     const startX = e.clientX;
     const startW = rightPane.offsetWidth;
 
-    function onMove(e) {
-      const dx = startX - e.clientX;
+    function onMove(ev) {
+      const dx = startX - ev.clientX;
       let w = startW + dx;
-      w = Math.max(280, Math.min(600, w));
+      w = Math.max(minWidth, Math.min(maxWidth, w));
       rightPane.style.setProperty('--right-pane-width', w + 'px');
     }
     function onUp() {
@@ -672,7 +693,7 @@ function initResize() {
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      localStorage.setItem(RESIZE_KEYS.rightPane, String(rightPane.offsetWidth));
+      localStorage.setItem(storageKey, String(rightPane.offsetWidth));
     }
 
     document.body.style.userSelect = 'none';
@@ -680,12 +701,12 @@ function initResize() {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
+}
 
-  // 패널 높이 (개념, 현재 실행, 메모리맵, 변수 테이블)
-  const saved = JSON.parse(localStorage.getItem(RESIZE_KEYS.panelHeights) || '{}');
-  const panels = ['panelConcept', 'panelExplain', 'panelMemViz', 'panelVars'];
+function initPanelResizers({ panelIds, storageKey }) {
+  const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
-  panels.forEach(id => {
+  panelIds.forEach(id => {
     const panel = document.getElementById(id);
     if (!panel) return;
     const def = parseInt(panel.dataset.default || '120', 10);
@@ -708,8 +729,8 @@ function initResize() {
       const startY = e.clientY;
       const startH = panel.offsetHeight;
 
-      function onMove(e) {
-        const dy = e.clientY - startY;
+      function onMove(ev) {
+        const dy = ev.clientY - startY;
         let h = Math.max(min, startH + dy);
         panel.style.height = h + 'px';
       }
@@ -719,12 +740,12 @@ function initResize() {
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
-        const saved = {};
-        panels.forEach(pid => {
+        const nextSaved = {};
+        panelIds.forEach(pid => {
           const p = document.getElementById(pid);
-          if (p) saved[pid] = p.offsetHeight;
+          if (p) nextSaved[pid] = p.offsetHeight;
         });
-        localStorage.setItem(RESIZE_KEYS.panelHeights, JSON.stringify(saved));
+        localStorage.setItem(storageKey, JSON.stringify(nextSaved));
       }
 
       document.body.style.userSelect = 'none';
@@ -732,6 +753,21 @@ function initResize() {
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+  });
+}
+
+function initResize() {
+  initRightPaneResizer({
+    rightPaneId: 'rightPane',
+    resizerId: 'resizerV',
+    storageKey: RESIZE_KEYS.rightPane,
+    minWidth: 280,
+    maxWidth: 600,
+  });
+
+  initPanelResizers({
+    panelIds: ['panelConcept', 'panelExplain', 'panelMemViz', 'panelVars'],
+    storageKey: RESIZE_KEYS.panelHeights,
   });
 }
 
