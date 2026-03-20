@@ -1,0 +1,57 @@
+---
+description: CH06/CH07 topics.js — C 소스 동기화 및 검증 체크리스트
+globs: "**/chapter0[67]/topics.js"
+alwaysApply: false
+---
+
+# topics.js (CH06/CH07) 시나리오 규칙
+
+## Source of truth
+
+- **CH06**: `src/chapter06/source06/*.c`
+- **CH07**: `src/chapter07/source07/*.c`
+
+토픽 수정·추가 시 해당 챕터의 C 소스 파일을 열고 동기화를 검증하세요.
+
+---
+
+## 기본 원칙
+
+- `code`: C 소스와 **동일한 순서·라인** (HTML 마크업만 추가)
+- `steps`: 구체적 입력 시나리오 (printf → scanf → 조건 → 출력 → return)
+- `varTypes` / `vars` / `memViz`가 서로 및 C 코드와 일치
+- 마지막 `return` 스텝: `memViz: { stack: [], heap: [], totalBytes: 0, released: '...' }`
+- 새 토픽: `TOPIC_META` + `TOPICS`에 함께 추가, 출력/분기 검증
+
+---
+
+## 재발 방지 체크리스트
+
+### 메모리 맵
+- [ ] `vars`에 **실제 값**만 사용. `'—'` 사용 시 해당 변수는 메모리 맵에서 제외됨
+- [ ] 변수가 해당 스텝에 없으면 `vars`에서 키 생략 (예: 외부 루프만 실행 시 `vars: { i: 2 }`, j 생략)
+
+### 코드 동기화
+- [ ] C에 있는 **모든** `printf`/`puts`/`scanf`가 `code`에 포함됨
+- [ ] 실행 라인마다 `id` 존재 (steps에서 참조)
+
+### 스텝 동기화 (루프 내 반복 누락 방지)
+- [ ] steps가 C 실행 순서와 동일
+- [ ] **루프 내부**: `printf` → `scanf` → 조건/처리 → 루프 조건이 **매 반복마다** steps에 있음 (생략 금지, 예: lab1max 키 입력 >> 매번)
+- [ ] `line`이 참조하는 `id`가 `code`에 존재
+
+### 출력 동기화
+- [ ] `printf`/`puts` 실행 시마다 해당 step에 `output` 있음 (출력 누락 금지)
+- [ ] 축약 스텝(예: "i=7~14 건너뜀")이 있어도, **누적 출력**은 별도 step 또는 `nl` step에 포함
+- [ ] **중첩 루프**: `puts("")`/`printf("\\n")` 직전 step에 해당 시점까지의 **누적 출력**을 `output`에 넣음 (예: 삼각형 `'*'`, `'**'`, `'***'`)
+- [ ] `output` 문자열이 C 실제 출력과 일치 (공백, 줄바꿈 포함)
+
+### 변수·메모리 (vars)
+- [ ] `vars`에 `'—'` 사용 금지 — 변수가 없으면 해당 키 **생략** (예: `vars: { i: 2 }`만, j 생략)
+- [ ] `varTypes`, `baseAddr`가 `vars` 변수와 일치
+
+### 검증 절차
+1. 해당 C 소스 파일 열기
+2. 가정한 입력값으로 실행 흐름 확인
+3. printf/puts 출력 순서·내용과 steps의 `output` 비교
+4. `node build.js` 후 브라우저에서 Step 실행해 확인

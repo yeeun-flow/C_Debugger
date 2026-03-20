@@ -12,24 +12,26 @@ alwaysApply: true
 ```
 c_debugger/
 ├── src/
-│   └── sample/
-│       ├── index.html
-│       ├── styles.css
-│       ├── debugger.js
-│       └── topics.js
-├── build.js
-├── c_debugger.html
+│   ├── sample/           # 단일 파일 빌드용 (c_debugger.html)
+│   │   ├── index.html, styles.css, debugger.js, topics.js
+│   ├── chapter06/        # 6장 조건문 (if/switch)
+│   │   ├── index.html, styles.css, debugger.js, topics.js
+│   │   └── source06/*.c
+│   └── chapter07/        # 7장 반복문 (while/for/break/continue/goto)
+│       ├── index.html, styles.css, debugger.js, topics.js
+│       └── source07/*.c
+├── build.js               # src/sample → c_debugger.html
+├── c_debugger.html        # 단일 파일 배포용
+├── ch06.html              # 6장용 (별도)
 └── .cursor/
 ```
 
 | 경로 | 역할 |
 |------|------|
-| `src/sample/index.html` | 메인 진입점 |
-| `src/sample/debugger.js` | 핵심 로직: 상태, 렌더링, Step |
-| `src/sample/topics.js` | 토픽 데이터 (code, steps, concept) |
-| `src/sample/styles.css` | UI 스타일 (다크/라이트) |
-| `build.js` | src/sample → c_debugger.html 번들 |
-| `c_debugger.html` | 단일 파일 배포용 (`node build.js`) |
+| `src/sample/*` | `node build.js` → c_debugger.html 번들 |
+| `src/chapter06/*` | 6장 조건문 (if/switch) — index.html 직접 열기 |
+| `src/chapter07/*` | 7장 반복문 — index.html 직접 열기 |
+| `src/chapter06/source06/*.c`, `src/chapter07/source07/*.c` | C 소스 (topics.js 시나리오의 source of truth) |
 
 ## 아키텍처
 

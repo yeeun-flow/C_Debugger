@@ -326,9 +326,55 @@ body {
 /* ═══ CONTENT SPLIT ═══ */
 .content-split {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 380px;
+  display: flex;
   overflow: hidden;
+  position: relative;
+}
+.editor-pane {
+  flex: 1;
+  min-width: 200px;
+}
+.right-pane {
+  width: var(--right-pane-width, 380px);
+  min-width: 280px;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+/* ═══ RESIZER ═══ */
+.resizer {
+  flex-shrink: 0;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.resizer:hover, .resizer.active {
+  background: var(--accent);
+}
+.resizer-v {
+  width: 4px;
+  cursor: col-resize;
+}
+.resizer-v:hover { width: 6px; margin: 0 -1px; }
+.resizer-h {
+  height: 4px;
+  cursor: row-resize;
+  flex-shrink: 0;
+}
+.resizer-h:hover { height: 6px; margin: 2px 0; }
+
+.resizable-panel {
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.resizable-panel .info-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ═══ EDITOR PANE ═══ */
@@ -442,14 +488,6 @@ body {
 .call-badge.skip { background: rgba(244,112,103,0.2); color: var(--accent-r); }
 .call-badge.next { background: rgba(91,156,246,0.2); color: var(--accent); }
 
-/* ═══ RIGHT PANE ═══ */
-.right-pane {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--bg2);
-}
-
 /* ═══ INFO PANELS ═══ */
 .info-panel {
   border-bottom: 1px solid var(--border);
@@ -527,6 +565,83 @@ body {
 .mem-val-cell  { color: var(--accent-g); font-weight: 600; }
 .mem-type-cell { color: var(--ty); font-size: 10px; }
 .mem-val-changed { animation: flash-var 0.6s ease; }
+
+/* ═══ MEMORY MAP (메모리맵 시각화) ═══ */
+.mem-map-col {
+  min-width: 200px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.mem-map-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.mem-map-hint { font-size: 8px; opacity: 0.8; }
+.mem-map-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mem-cell-row {
+  display: grid;
+  grid-template-columns: 70px 52px minmax(0, 1fr) 50px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  transition: background 0.2s;
+}
+.mem-cell-row.highlight-row {
+  background: rgba(67,217,173,0.15);
+  border-color: var(--accent-g);
+  box-shadow: 0 0 0 1px rgba(67,217,173,0.3);
+}
+.mem-cell-addr {
+  color: var(--accent);
+  font-size: 9px;
+  word-break: break-all;
+}
+.mem-cell-name {
+  color: var(--accent-y);
+  font-weight: 600;
+}
+.mem-cell-bytes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.mem-byte {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 3px;
+  background: var(--bg3);
+  border-radius: 2px;
+  color: var(--accent-o);
+  font-size: 9px;
+  text-align: center;
+}
+.mem-cell-row.highlight-row .mem-byte {
+  background: rgba(67,217,173,0.2);
+  color: var(--accent-g);
+}
+.mem-cell-val {
+  color: var(--accent-g);
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ═══ STACK VISUALIZER ═══ */
 .stack-viz-wrap {
@@ -985,7 +1100,7 @@ body {
     </div>
 
     <!-- CONTENT SPLIT -->
-    <div class="content-split">
+    <div class="content-split" id="contentSplit">
 
       <!-- EDITOR -->
       <div class="editor-pane">
@@ -995,11 +1110,12 @@ body {
         <div class="code-area" id="codeArea"></div>
       </div>
 
-      <!-- RIGHT PANE -->
-      <div class="right-pane">
+      <div class="resizer resizer-v" id="resizerV" title="드래그하여 너비 조절"></div>
 
-        <!-- CONCEPT -->
-        <div class="info-panel">
+      <!-- RIGHT PANE -->
+      <div class="right-pane" id="rightPane">
+
+        <div class="info-panel resizable-panel" id="panelConcept" data-min="80" data-default="120">
           <div class="info-panel-header">
             <span class="info-panel-title">📖 개념</span>
           </div>
@@ -1007,9 +1123,9 @@ body {
             <div class="concept-body" id="conceptBody">로드 중…</div>
           </div>
         </div>
+        <div class="resizer resizer-h" data-resize="panelConcept" title="드래그하여 높이 조절"></div>
 
-        <!-- EXPLAIN -->
-        <div class="info-panel">
+        <div class="info-panel resizable-panel" id="panelExplain" data-min="60" data-default="100">
           <div class="info-panel-header">
             <span class="info-panel-title">⚡ 현재 실행</span>
             <span id="condBadge"></span>
@@ -1018,9 +1134,9 @@ body {
             <div class="explain-box" id="explainBox">▶ Step 버튼을 눌러 실행을 시작하세요.</div>
           </div>
         </div>
+        <div class="resizer resizer-h" data-resize="panelExplain" title="드래그하여 높이 조절"></div>
 
-        <!-- MEMORY VISUALIZER -->
-        <div class="info-panel" id="memVizPanel">
+        <div class="info-panel resizable-panel" id="panelMemViz" data-min="80" data-default="180">
           <div class="info-panel-header">
             <span class="info-panel-title">🗂 메모리 맵</span>
             <span id="memVizByteLabel" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent-o);letter-spacing:0.5px"></span>
@@ -1031,9 +1147,9 @@ body {
             </div>
           </div>
         </div>
+        <div class="resizer resizer-h" data-resize="panelMemViz" title="드래그하여 높이 조절"></div>
 
-        <!-- VARIABLES -->
-        <div class="info-panel">
+        <div class="info-panel resizable-panel" id="panelVars" data-min="60" data-default="120">
           <div class="info-panel-header">
             <span class="info-panel-title">📦 변수 테이블</span>
           </div>
@@ -1048,6 +1164,7 @@ body {
             </div>
           </div>
         </div>
+        <div class="resizer resizer-h" data-resize="panelVars" title="드래그하여 높이 조절"></div>
 
         <!-- OUTPUT -->
         <div class="info-panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column;border-bottom:none">
@@ -1220,40 +1337,49 @@ const TOPICS = {
 
   // ── switch 기본 ──────────────────────────────────────────
   switch_basic: {
-    name: 'switch.c',
-    title: 'switch / case',
-    varTypes: { day: 'int' },
+    name: '07seasonswitch.c',
+    title: 'switch / case (월 → 계절)',
+    varTypes: { month: 'int' },
     concept: `<b>switch</b>는 하나의 정수/문자 값을 여러 <code>case</code>와 비교합니다.<br>
-일치하는 case부터 실행하며, <code>break</code>로 탈출합니다.<br>
-<b class="r">break 미사용 → fall-through 발생!</b> <code>default</code>는 어떤 case도 일치하지 않을 때 실행됩니다.`,
-    vars: { day: null },
-    baseAddr: { day: '0x7fff5200' },
+여러 값을 한 case 블록으로 묶을 수 있고, <code>break</code>를 만나면 그 자리에서 탈출합니다.<br>
+이 예제에서는 <b>월(month)</b> 값에 따라 <b>계절</b>을 출력합니다. (디버거에서는 month=8을 예로 시뮬레이션)`,
+    vars: { month: null },
+    baseAddr: { month: '0x7fff5200' },
     code: [
+      { text:`<span class="pp">#define</span> <span class="pp">_CRT_SECURE_NO_WARNINGS</span>`, blank:true },
       { text:`<span class="pp">#include</span> <span class="st">&lt;stdio.h&gt;</span>`, blank:true },
       { text:``, blank:true },
-      { text:`<span class="ty">int</span> <span class="fn-c">main</span>() {`, blank:true },
-      { id:'d1',   text:`    <span class="ty">int</span> <span class="vr">day</span> = <span class="nm">3</span>;` },
-      { id:'sw',   text:`    <span class="kw">switch</span> (<span class="vr">day</span>) {` },
-      { id:'c1',   text:`        <span class="kw">case</span> <span class="nm">1</span>: <span class="fn-c">printf</span>(<span class="st">"월요일\\n"</span>); <span class="kw">break</span>;` },
-      { id:'c2',   text:`        <span class="kw">case</span> <span class="nm">2</span>: <span class="fn-c">printf</span>(<span class="st">"화요일\\n"</span>); <span class="kw">break</span>;` },
-      { id:'c3',   text:`        <span class="kw">case</span> <span class="nm">3</span>: <span class="fn-c">printf</span>(<span class="st">"수요일\\n"</span>); <span class="kw">break</span>;` },
-      { id:'c4',   text:`        <span class="kw">case</span> <span class="nm">4</span>: <span class="fn-c">printf</span>(<span class="st">"목요일\\n"</span>); <span class="kw">break</span>;` },
-      { id:'c5',   text:`        <span class="kw">case</span> <span class="nm">5</span>: <span class="fn-c">printf</span>(<span class="st">"금요일\\n"</span>); <span class="kw">break</span>;` },
-      { id:'def',  text:`        <span class="kw">default</span>: <span class="fn-c">printf</span>(<span class="st">"주말\\n"</span>);` },
+      { text:`<span class="ty">int</span> <span class="fn-c">main</span>(<span class="ty">void</span>) {`, blank:true },
+      { id:'d1',  text:`    <span class="ty">int</span> <span class="vr">month</span> = <span class="nm">8</span>;` },
+      { id:'sw',  text:`    <span class="kw">switch</span> (<span class="vr">month</span>) {` },
+      { id:'c1',  text:`        <span class="kw">case</span> <span class="nm">4</span>: <span class="kw">case</span> <span class="nm">5</span>:` },
+      { id:'p1',  text:`            <span class="fn-c">printf</span>(<span class="st">"%d월은 봄입니다.\\n"</span>, <span class="vr">month</span>); <span class="kw">break</span>;` },
+      { id:'c2',  text:`        <span class="kw">case</span> <span class="nm">6</span>: <span class="kw">case</span> <span class="nm">7</span>: <span class="kw">case</span> <span class="nm">8</span>:` },
+      { id:'p2',  text:`            <span class="fn-c">printf</span>(<span class="st">"%d월은 여름입니다.\\n"</span>, <span class="vr">month</span>); <span class="kw">break</span>;` },
+      { id:'c3',  text:`        <span class="kw">case</span> <span class="nm">9</span>: <span class="kw">case</span> <span class="nm">10</span>: <span class="kw">case</span> <span class="nm">11</span>:` },
+      { id:'p3',  text:`            <span class="fn-c">printf</span>(<span class="st">"%d월은 가을입니다.\\n"</span>, <span class="vr">month</span>); <span class="kw">break</span>;` },
+      { id:'c4',  text:`        <span class="kw">case</span> <span class="nm">12</span>: <span class="kw">case</span> <span class="nm">1</span>: <span class="kw">case</span> <span class="nm">2</span>: <span class="kw">case</span> <span class="nm">3</span>:` },
+      { id:'p4',  text:`            <span class="fn-c">printf</span>(<span class="st">"%d월은 겨울입니다.\\n"</span>, <span class="vr">month</span>); <span class="kw">break</span>;` },
+      { id:'def', text:`        <span class="kw">default</span>:` },
+      { id:'p5',  text:`            <span class="fn-c">printf</span>(<span class="st">"월(month)을 잘못 입력했습니다.\\n"</span>);` },
       { text:`    }`, blank:true },
-      { id:'ret',  text:`    <span class="kw">return</span> <span class="nm">0</span>;` },
+      { id:'ret', text:`    <span class="kw">return</span> <span class="nm">0</span>;` },
       { text:`}`, blank:true },
     ],
     steps: [
-      { line:'d1',  type:'exec', vars:{day:3}, explain:`<b>day = 3</b> 선언. 스택 0x7fff5200 (4bytes).`, output:null },
-      { line:'sw',  type:'exec', explain:`switch(day) 평가 — day값(3)으로 점프 테이블 조회 시작.`, output:null },
-      { line:'c1',  type:'skip', explain:`case 1: day(3) ≠ 1 → <span class="e-skip">건너뜀</span>.`, output:null },
-      { line:'c2',  type:'skip', explain:`case 2: day(3) ≠ 2 → <span class="e-skip">건너뜀</span>.`, output:null },
-      { line:'c3',  type:'exec', explain:`case 3: day(3) == 3 → <span class="e-exec">일치!</span> "수요일" 출력 후 break로 switch 탈출.`, output:'수요일' },
-      { line:'c4',  type:'skip', explain:`break 이후라 case 4는 <span class="e-skip">실행 안 됨</span>.`, output:null },
-      { line:'c5',  type:'skip', explain:`case 5도 <span class="e-skip">건너뜀</span>.`, output:null },
-      { line:'def', type:'skip', explain:`default도 <span class="e-skip">건너뜀</span> (이미 case 3이 실행됨).`, output:null },
-      { line:'ret', type:'exec', explain:`<b>return 0</b> — 종료.`, output:null },
+      { line:'d1',  type:'exec', vars:{month:8}, explain:`<b>int month = 8;</b> — 예시로 8월을 저장합니다. (스택 0x7fff5200에 4바이트)`, output:null },
+      { line:'sw',  type:'exec', explain:`<b>switch(month)</b> 시작 — month 값(8)에 따라 해당 case 블록을 찾습니다.`, output:null },
+      { line:'c1',  type:'skip', explain:`<b>case 4, 5:</b> month(8)은 4 또는 5가 아니므로 이 블록은 <span class="e-skip">건너뜁니다</span>.`, output:null },
+      { line:'p1',  type:'skip', explain:`봄 출력 라인도 함께 <span class="e-skip">실행되지 않습니다</span>.`, output:null },
+      { line:'c2',  type:'exec', explain:`<b>case 6, 7, 8:</b> month(8)이 여기에 포함되므로 <span class="e-exec">일치!</span> 이 아래 블록을 실행합니다.`, output:null },
+      { line:'p2',  type:'exec', explain:`<span class="e-exec">실행:</span> printf("%d월은 여름입니다.\\n", month) → "8월은 여름입니다." 출력 후 <b>break</b>로 switch 탈출.`, output:'8월은 여름입니다.' },
+      { line:'c3',  type:'skip', explain:`이미 break로 switch 문을 빠져나왔으므로 case 9,10,11은 <span class="e-skip">실행되지 않습니다</span>.`, output:null },
+      { line:'p3',  type:'skip', explain:`가을 출력도 <span class="e-skip">건너뜀</span>.`, output:null },
+      { line:'c4',  type:'skip', explain:`겨울에 해당하는 case 12,1,2,3 블록 또한 <span class="e-skip">도달하지 않습니다</span>.`, output:null },
+      { line:'p4',  type:'skip', explain:`겨울 출력도 실행되지 않습니다.`, output:null },
+      { line:'def', type:'skip', explain:`<b>default</b>는 어떤 case도 일치하지 않을 때만 실행되지만, 이미 6·7·8에서 일치했으므로 <span class="e-skip">건너뜀</span>.`, output:null },
+      { line:'p5',  type:'skip', explain:`잘못된 월 안내 메시지도 실행되지 않습니다.`, output:null },
+      { line:'ret', type:'exec', explain:`<b>return 0;</b> — main 함수가 종료되고 프로그램이 끝납니다.`, output:null },
     ]
   },
 
@@ -2177,6 +2303,7 @@ const state = {
   stepIndex: 0,
   outputLines: [],
   varState: {},
+  lastMemViz: null,
 };
 
 // ══════════════════════════════════════════════════════════
@@ -2299,6 +2426,69 @@ function clearOutput() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  MEMORY MAP: 값 → 헥스 바이트 (리틀 엔디안)
+// ══════════════════════════════════════════════════════════
+function valToHexBytes(val, type, bytes) {
+  const b = bytes || (type && type.includes('*') ? 8 : type === 'double' ? 8 : 4);
+  const empty = () => Array(b).fill('??');
+  if (val === '???' || val === null || val === undefined) return empty();
+  if (type === 'int' || type === 'int*') {
+    if (type.includes('*')) {
+      if (typeof val === 'string' && val.startsWith('0x')) {
+        const hex = val.replace('0x','').replace(/[^0-9a-fA-F]/g,'').padStart(16,'0').slice(-16);
+        const pairs = [];
+        for (let i = hex.length - 2; i >= 0; i -= 2) pairs.push(hex.slice(i, i + 2));
+        return pairs.length ? pairs : empty();
+      }
+      return empty();
+    }
+    const n = typeof val === 'string' ? parseInt(val, 10) : val;
+    if (isNaN(n)) return empty();
+    const hex = (n >>> 0).toString(16).padStart(8, '0');
+    return [hex.slice(6,8), hex.slice(4,6), hex.slice(2,4), hex.slice(0,2)];
+  }
+  if (type === 'double') {
+    const f = parseFloat(val);
+    if (isNaN(f)) return empty();
+    const buf = new ArrayBuffer(8);
+    new DataView(buf).setFloat64(0, f, true);
+    return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2, '0'));
+  }
+  return empty();
+}
+
+// ══════════════════════════════════════════════════════════
+//  VARSTATE → MEMVIZ (memViz 없는 스텝에서 변수 할당 시 메모리 맵 표시)
+// ══════════════════════════════════════════════════════════
+function buildMemVizFromVarState(topic, varState) {
+  const t = topic;
+  if (!t || !t.varTypes || !varState || Object.keys(varState).length === 0) return null;
+  const addrs = (t._autoBaseAddr || t.baseAddr || {});
+  const varNames = Object.keys(t.varTypes);
+  const vars = varNames
+    .filter(name => {
+      const v = varState[name];
+      const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
+      return v !== undefined && val !== '—';
+    })
+    .map(name => {
+      const v = varState[name];
+      const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
+      const type = t.varTypes[name] || 'int';
+      const bytes = getTypeBytes(type);
+      const addr = addrs[name] || '0x7fff????';
+      return { name, type, bytes, val, addr, highlight: false };
+    });
+  if (vars.length === 0) return null;
+  const totalBytes = vars.reduce((a, v) => a + v.bytes, 0) + 16;
+  return {
+    stack: [{ fn: 'main', color: 'main', vars, retAddr: '0x400640' }],
+    heap: [],
+    totalBytes,
+  };
+}
+
+// ══════════════════════════════════════════════════════════
 //  STACK VISUALIZER RENDERER
 // ══════════════════════════════════════════════════════════
 function renderStackViz(memViz) {
@@ -2317,6 +2507,31 @@ function renderStackViz(memViz) {
 
   let html = '';
 
+  // ── 메모리맵 시각화 (스택 변수) ─────────────────────────
+  const allVars = stack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
+  if (allVars.length > 0) {
+    html += `<div class="mem-map-col">
+      <div class="mem-map-label">🗺 메모리 맵 <span class="mem-map-hint">(↑ 최신 위)</span></div>
+      <div class="mem-map-grid">`;
+
+    allVars.forEach(v => {
+      const hexBytes = valToHexBytes(v.val, v.type, v.bytes);
+      const hlCls = v.highlight ? 'mem-cell-row highlight-row' : 'mem-cell-row';
+      html += `<div class="${hlCls}">
+        <div class="mem-cell-addr">${escHtml(v.addr)}</div>
+        <div class="mem-cell-name">${escHtml(v.name)}</div>
+        <div class="mem-cell-bytes">`;
+      hexBytes.forEach((h, i) => {
+        html += `<span class="mem-byte" title="${escHtml(v.name)} byte ${i}">${escHtml(h)}</span>`;
+      });
+      html += `</div>
+        <div class="mem-cell-val">${escHtml(String(v.val))}</div>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  }
+
   // ── STACK COLUMN ──
   html += `<div class="stack-col">
     <div class="stack-col-label">📦 STACK  (↓성장)</div>`;
@@ -2326,7 +2541,7 @@ function renderStackViz(memViz) {
   } else if (stack.length === 0) {
     html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);padding:8px;text-align:center">비어있음</div>`;
   } else {
-    stack.forEach(frame => {
+    stack.slice().reverse().forEach(frame => {
       const headerCls = `frame-fn-${frame.color}`;
       const varBytes = frame.vars.reduce((a, v) => a + v.bytes, 0);
       const totalFrameBytes = varBytes + 8 + 8;
@@ -2452,6 +2667,7 @@ function updateUI() {
   $(IDS.btnStep).disabled = state.stepIndex >= total;
 
   if (state.stepIndex === 0) {
+    state.lastMemViz = null;
     renderCode(state.currentTopic, null, null);
     $(IDS.explainBox).innerHTML = '▶ Step 버튼을 눌러 실행을 시작하세요.';
     $(IDS.condBadge).innerHTML = '';
@@ -2473,7 +2689,34 @@ function updateUI() {
   }
 
   renderMemTable(state.currentTopic, step.vars || null);
-  renderStackViz(step.memViz || null);
+  if (step.memViz !== undefined) {
+    const memViz = step.memViz || null;
+    const memChanged = !_memVizEqual(memViz, state.lastMemViz);
+    if (memChanged) {
+      state.lastMemViz = memViz;
+      renderStackViz(memViz);
+    }
+    if (memViz && memViz.stack && memViz.stack.length === 0 && (!memViz.heap || memViz.heap.length === 0)) {
+      state.varState = {};
+      renderMemTable(state.currentTopic, null);
+    }
+  } else {
+    const synthetic = buildMemVizFromVarState(t, state.varState);
+    if (synthetic) {
+      state.lastMemViz = synthetic;
+      renderStackViz(synthetic);
+    } else if (state.lastMemViz) {
+      renderStackViz(state.lastMemViz);
+    }
+  }
+}
+
+function _memVizEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch (_) { return false; }
 }
 
 function stepForward() {
@@ -2504,7 +2747,9 @@ function stepBack() {
     }
     if (t.steps[i].memViz) lastMemViz = t.steps[i].memViz;
   }
-  renderStackViz(lastMemViz);
+  state.lastMemViz = lastMemViz;
+  const toShow = lastMemViz || buildMemVizFromVarState(t, state.varState);
+  renderStackViz(toShow);
   updateUI();
 }
 
@@ -2521,13 +2766,20 @@ function runAll() {
     if (step.memViz) lastMemViz = step.memViz;
   }
   renderOutput(state.outputLines, '// 출력 없음');
-  if (lastMemViz) renderStackViz(lastMemViz);
+  const toShow = lastMemViz || buildMemVizFromVarState(t, state.varState);
+  state.lastMemViz = toShow || lastMemViz;
+  if (toShow) renderStackViz(toShow);
+  if (lastMemViz && lastMemViz.stack && lastMemViz.stack.length === 0 && (!lastMemViz.heap || lastMemViz.heap.length === 0)) {
+    state.varState = {};
+    renderMemTable(state.currentTopic, null);
+  }
   updateUI();
 }
 
 function resetDebug() {
   state.stepIndex = 0;
   state.varState = {};
+  state.lastMemViz = null;
   clearOutput();
   updateUI();
 }
@@ -2586,6 +2838,7 @@ function selectTopic(topicKey) {
   state.stepIndex = 0;
   state.varState = {};
   state.outputLines = [];
+  state.lastMemViz = null;
 
   document.querySelectorAll('.sidebar-item, .sidebar-subitem').forEach(el => {
     el.classList.remove('active');
@@ -2629,9 +2882,97 @@ function toggleTheme() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  RESIZE (드래그로 패널 크기 조절)
+// ══════════════════════════════════════════════════════════
+const RESIZE_KEYS = { rightPane: 'cdebugger-right-pane-width', panelHeights: 'cdebugger-panel-heights' };
+
+function initResize() {
+  const rightPane = document.getElementById('rightPane');
+  const resizerV = document.getElementById('resizerV');
+  if (!rightPane || !resizerV) return;
+
+  let rpWidth = parseInt(localStorage.getItem(RESIZE_KEYS.rightPane) || '380', 10);
+  rpWidth = Math.max(280, Math.min(600, rpWidth));
+  rightPane.style.setProperty('--right-pane-width', rpWidth + 'px');
+
+  resizerV.addEventListener('mousedown', e => {
+    e.preventDefault();
+    resizerV.classList.add('active');
+    const startX = e.clientX;
+    const startW = rightPane.offsetWidth;
+    function onMove(e) {
+      const dx = startX - e.clientX;
+      let w = Math.max(280, Math.min(600, startW + dx));
+      rightPane.style.setProperty('--right-pane-width', w + 'px');
+    }
+    function onUp() {
+      resizerV.classList.remove('active');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      localStorage.setItem(RESIZE_KEYS.rightPane, String(rightPane.offsetWidth));
+    }
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  const saved = JSON.parse(localStorage.getItem(RESIZE_KEYS.panelHeights) || '{}');
+  const panels = ['panelConcept', 'panelExplain', 'panelMemViz', 'panelVars'];
+  panels.forEach(id => {
+    const panel = document.getElementById(id);
+    if (!panel) return;
+    const def = parseInt(panel.dataset.default || '120', 10);
+    const min = parseInt(panel.dataset.min || '60', 10);
+    let h = saved[id] || def;
+    h = Math.max(min, h);
+    panel.style.height = h + 'px';
+    panel.style.minHeight = min + 'px';
+    panel.style.flexShrink = '0';
+  });
+
+  document.querySelectorAll('.resizer-h[data-resize]').forEach(resizer => {
+    resizer.addEventListener('mousedown', e => {
+      e.preventDefault();
+      resizer.classList.add('active');
+      const panelId = resizer.dataset.resize;
+      const panel = document.getElementById(panelId);
+      if (!panel) return;
+      const min = parseInt(panel.dataset.min || '60', 10);
+      const startY = e.clientY;
+      const startH = panel.offsetHeight;
+      function onMove(e) {
+        const dy = e.clientY - startY;
+        panel.style.height = Math.max(min, startH + dy) + 'px';
+      }
+      function onUp() {
+        resizer.classList.remove('active');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        const saved = {};
+        panels.forEach(pid => {
+          const p = document.getElementById(pid);
+          if (p) saved[pid] = p.offsetHeight;
+        });
+        localStorage.setItem(RESIZE_KEYS.panelHeights, JSON.stringify(saved));
+      }
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'row-resize';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════
 setTheme(getTheme());
+initResize();
 renderSidebar();
 selectTopic('if_basic');
 

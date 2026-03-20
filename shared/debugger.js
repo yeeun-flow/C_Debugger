@@ -22,18 +22,33 @@ const IDS = {
   topTitle: 'topTitle',
   conceptBody: 'conceptBody',
   sidebarScroll: 'sidebarScroll',
+  sidebarHeader: 'sidebarHeader',
 };
 
 // ══════════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════════
 const state = {
-  currentTopic: 'if_basic',
+  currentChapter: 'ch06',
+  currentTopic: null,
   stepIndex: 0,
   outputLines: [],
   varState: {},
   lastMemViz: null,
 };
+
+// 타입 메타데이터: 바이트 수, 표시용 타입 이름 등
+const TYPE_META = {
+  int:    { bytes: 4,  display: 'int' },
+  double: { bytes: 8,  display: 'double' },
+};
+
+function getTypeBytes(type) {
+  if (!type) return 4;
+  if (TYPE_META[type]) return TYPE_META[type].bytes;
+  if (type.includes('*')) return 8;
+  return 4;
+}
 
 // ══════════════════════════════════════════════════════════
 //  UTILS
@@ -158,7 +173,7 @@ function clearOutput() {
 //  MEMORY MAP: 값 → 헥스 바이트 (리틀 엔디안)
 // ══════════════════════════════════════════════════════════
 function valToHexBytes(val, type, bytes) {
-  const b = bytes || (type && type.includes('*') ? 8 : type === 'double' ? 8 : 4);
+  const b = bytes || getTypeBytes(type);
   const empty = () => Array(b).fill('??');
   if (val === '???' || val === null || val === undefined) return empty();
   if (type === 'int' || type === 'int*') {
@@ -187,7 +202,172 @@ function valToHexBytes(val, type, bytes) {
 }
 
 // ══════════════════════════════════════════════════════════
-//  VARSTATE → MEMVIZ (memViz 없는 스텝에서 변수 할당 시 메모리 맵 표시)
+//  STACK VISUALIZER HELPERS
+// ══════════════════════════════════════════════════════════
+function _buildNormalizedStackFrames(stack, topic, varState) {
+  const t = topic;
+  const autoBase = t && t._autoBaseAddr ? t._autoBaseAddr : (t && t.baseAddr) || {};
+
+  return stack.map(frame => {
+    const vars = frame.vars.map(v => {
+      const type = v.type || (t && t.varTypes && t.varTypes[v.name]) || 'int';
+      const addr = autoBase[v.name] || v.addr || '0x7fff????';
+      const bytes = v.bytes || getTypeBytes(type);
+      const inState = varState[v.name];
+      const val = inState ? inState.val : v.val;
+      return { ...v, type, addr, bytes, val };
+    });
+    return { ...frame, vars };
+  });
+}
+
+function _renderMemMapColumn(normalizedStack) {
+  const allVars = normalizedStack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
+  if (allVars.length === 0) return '';
+
+  let html = `<div class="mem-map-col">
+      <div class="mem-map-label">🗺 메모리 맵 <span class="mem-map-hint">(↑ 최신 위)</span></div>
+      <div class="mem-map-grid">`;
+
+  allVars.forEach(v => {
+    const hexBytes = valToHexBytes(v.val, v.type, v.bytes);
+    const hlCls = v.highlight ? 'mem-cell-row highlight-row' : 'mem-cell-row';
+    html += `<div class="${hlCls}">
+        <div class="mem-cell-addr">${escHtml(v.addr)}</div>
+        <div class="mem-cell-name">${escHtml(v.name)}</div>
+        <div class="mem-cell-bytes">`;
+    hexBytes.forEach((h, i) => {
+      const isUnknown = h === '??';
+      const title = isUnknown
+        ? `${escHtml(v.name)} byte ${i} — 미초기화(쓰레기 값)`
+        : `${escHtml(v.name)} byte ${i} = 0x${h}`;
+      html += `<span class="mem-byte" title="${title}">${escHtml(h)}</span>`;
+    });
+    html += `</div>
+        <div class="mem-cell-val">${escHtml(String(v.val))}</div>
+      </div>`;
+  });
+
+  html += `</div></div>`;
+  return html;
+}
+
+function _renderStackColumn(normalizedStack, heap) {
+  let html = `<div class="stack-col">
+    <div class="stack-col-label">📦 STACK  (↓성장)</div>`;
+
+  if (normalizedStack.length === 0 && (!heap || heap.length === 0)) {
+    // empty state는 상위에서 처리
+  } else if (normalizedStack.length === 0) {
+    html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);padding:8px;text-align:center">비어있음</div>`;
+  } else {
+    normalizedStack.slice().reverse().forEach(frame => {
+      const headerCls = `frame-fn-${frame.color}`;
+      const varBytes = frame.vars.reduce((a, v) => a + v.bytes, 0);
+      const totalFrameBytes = varBytes + 8 + 8;
+
+      html += `<div class="stack-frame">
+        <div class="frame-header ${headerCls}">
+          <span>${escHtml(frame.fn)}()</span>
+          <span style="font-size:9px;opacity:0.85">${totalFrameBytes}B</span>
+        </div>`;
+
+      frame.vars.forEach(v => {
+        const hlCls = v.highlight ? 'highlight-row' : '';
+        html += `<div class="frame-row ${hlCls}">
+          <span class="frame-row-name">${escHtml(v.name)}</span>
+          <span class="frame-row-type">${escHtml(v.type)}</span>
+          <span class="frame-row-val" title="${escHtml(String(v.val))}">${escHtml(String(v.val))}</span>
+          <span class="frame-row-bytes">${v.bytes}B</span>
+        </div>`;
+      });
+
+      if (frame.vars.length > 0) {
+        const lo = frame.vars[frame.vars.length - 1].addr;
+        const hi = frame.vars[0].addr;
+        html += `<div class="frame-addr-row">
+          <span class="frame-addr-label">addr</span>
+          <span class="frame-addr-val">${lo !== hi ? lo + '~' + hi.slice(-4) : lo}</span>
+        </div>`;
+      }
+
+      html += `<div class="frame-ret-row">
+        <span class="frame-ret-label">ret →</span>
+        <span class="frame-ret-val">${escHtml(frame.retAddr)}</span>
+      </div>`;
+
+      html += `<div class="frame-total-row">
+        <span class="frame-total-label">frame total</span>
+        <span class="frame-total-val">${totalFrameBytes}B</span>
+      </div>
+      </div>`;
+    });
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function _renderHeapAndPointers(heap, ptrLinks, released) {
+  let html = '';
+
+  if (heap.length > 0 && ptrLinks.length > 0) {
+    html += `<div class="ptr-connector">`;
+    ptrLinks.forEach(pl => {
+      const isDangling = pl.dangling || false;
+      html += `<div class="${isDangling ? 'ptr-dangling' : ''}" style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${isDangling ? 'var(--accent-r)' : 'var(--accent)'}">
+          ${escHtml(pl.from)}
+        </span>
+        <div class="ptr-line"></div>
+      </div>`;
+    });
+    html += `</div>`;
+  } else if (heap.length > 0) {
+    html += `<div style="display:flex;align-items:center;padding:0 6px">
+      <div style="width:16px;height:1px;background:var(--border2)"></div>
+    </div>`;
+  }
+
+  if (heap.length > 0) {
+    html += `<div class="stack-col" style="min-width:130px">
+      <div class="stack-col-label">🧱 HEAP  (↑성장)</div>`;
+
+    heap.forEach(blk => {
+      const headerCls = blk.freed ? 'freed-header' : '';
+      const blockCls  = blk.freed ? 'heap-block freed' : 'heap-block';
+      html += `<div class="${blockCls}">
+        <div class="heap-header ${headerCls}">
+          <span>${escHtml(blk.label)}</span>
+          <span>${blk.bytes}B</span>
+        </div>`;
+
+      blk.items.forEach(it => {
+        html += `<div class="heap-row">
+          <span class="heap-row-name">${escHtml(it.name)}</span>
+          <span class="heap-row-val" title="${escHtml(String(it.val))}">${escHtml(String(it.val))}</span>
+          <span class="heap-row-bytes">${it.bytes}B</span>
+        </div>`;
+      });
+
+      html += `<div class="heap-addr-row">${escHtml(blk.addr)}</div>
+      </div>`;
+    });
+
+    html += `</div>`;
+  }
+
+  if (released) {
+    html += `<div style="position:absolute;bottom:6px;left:10px;right:10px">
+      <div class="released-banner">⬇ ${escHtml(released)}</div>
+    </div>`;
+  }
+
+  return html;
+}
+
+// ══════════════════════════════════════════════════════════
+//  VARSTATE → MEMVIZ
 // ══════════════════════════════════════════════════════════
 function buildMemVizFromVarState(topic, varState) {
   const t = topic;
@@ -234,150 +414,23 @@ function renderStackViz(memViz) {
   const { stack = [], heap = [], totalBytes = 0, released } = memViz;
   byteLabel.textContent = `${totalBytes}B`;
 
-  let html = '';
+  const t = TOPICS[state.currentTopic];
+  const normalizedStack = _buildNormalizedStackFrames(stack, t, state.varState);
 
-  // ── 메모리맵 시각화 (스택 변수) ─────────────────────────
-  const allVars = stack.slice().reverse().flatMap(f => f.vars.map(v => ({ ...v, fn: f.fn })));
-  if (allVars.length > 0) {
-    html += `<div class="mem-map-col">
-      <div class="mem-map-label">🗺 메모리 맵 <span class="mem-map-hint">(↑ 최신 위)</span></div>
-      <div class="mem-map-grid">`;
-
-    allVars.forEach(v => {
-      const hexBytes = valToHexBytes(v.val, v.type, v.bytes);
-      const hlCls = v.highlight ? 'mem-cell-row highlight-row' : 'mem-cell-row';
-      html += `<div class="${hlCls}">
-        <div class="mem-cell-addr">${escHtml(v.addr)}</div>
-        <div class="mem-cell-name">${escHtml(v.name)}</div>
-        <div class="mem-cell-bytes">`;
-      hexBytes.forEach((h, i) => {
-        html += `<span class="mem-byte" title="${escHtml(v.name)} byte ${i}">${escHtml(h)}</span>`;
-      });
-      html += `</div>
-        <div class="mem-cell-val">${escHtml(String(v.val))}</div>
-      </div>`;
-    });
-
-    html += `</div></div>`;
-  }
-
-  // ── STACK COLUMN ──
-  html += `<div class="stack-col">
-    <div class="stack-col-label">📦 STACK  (↓성장)</div>`;
-
-  if (stack.length === 0 && heap.length === 0) {
-    // empty state handled below
-  } else if (stack.length === 0) {
-    html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);padding:8px;text-align:center">비어있음</div>`;
-  } else {
-    stack.slice().reverse().forEach(frame => {
-      const headerCls = `frame-fn-${frame.color}`;
-      const varBytes = frame.vars.reduce((a, v) => a + v.bytes, 0);
-      const totalFrameBytes = varBytes + 8 + 8;
-
-      html += `<div class="stack-frame">
-        <div class="frame-header ${headerCls}">
-          <span>${escHtml(frame.fn)}()</span>
-          <span style="font-size:9px;opacity:0.85">${totalFrameBytes}B</span>
-        </div>`;
-
-      frame.vars.forEach(v => {
-        const hlCls = v.highlight ? 'highlight-row' : '';
-        html += `<div class="frame-row ${hlCls}">
-          <span class="frame-row-name">${escHtml(v.name)}</span>
-          <span class="frame-row-type">${escHtml(v.type)}</span>
-          <span class="frame-row-val" title="${escHtml(String(v.val))}">${escHtml(String(v.val))}</span>
-          <span class="frame-row-bytes">${v.bytes}B</span>
-        </div>`;
-      });
-
-      if (frame.vars.length > 0) {
-        const lo = frame.vars[frame.vars.length - 1].addr;
-        const hi = frame.vars[0].addr;
-        html += `<div class="frame-addr-row">
-          <span class="frame-addr-label">addr</span>
-          <span class="frame-addr-val">${lo !== hi ? lo + '~' + hi.slice(-4) : lo}</span>
-        </div>`;
-      }
-
-      html += `<div class="frame-ret-row">
-        <span class="frame-ret-label">ret →</span>
-        <span class="frame-ret-val">${escHtml(frame.retAddr)}</span>
-      </div>`;
-
-      html += `<div class="frame-total-row">
-        <span class="frame-total-label">frame total</span>
-        <span class="frame-total-val">${totalFrameBytes}B</span>
-      </div>
-      </div>`;
-    });
-  }
-
-  html += `</div>`;
-
-  // ── POINTER CONNECTORS ──
-  if (heap.length > 0 && ptrLinks.length > 0) {
-    html += `<div class="ptr-connector">`;
-    ptrLinks.forEach(pl => {
-      const isDangling = pl.dangling || false;
-      html += `<div class="${isDangling ? 'ptr-dangling' : ''}" style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${isDangling ? 'var(--accent-r)' : 'var(--accent)'}">
-          ${escHtml(pl.from)}
-        </span>
-        <div class="ptr-line"></div>
-      </div>`;
-    });
-    html += `</div>`;
-  } else if (heap.length > 0) {
-    html += `<div style="display:flex;align-items:center;padding:0 6px">
-      <div style="width:16px;height:1px;background:var(--border2)"></div>
-    </div>`;
-  }
-
-  // ── HEAP COLUMN ──
-  if (heap.length > 0) {
-    html += `<div class="stack-col" style="min-width:130px">
-      <div class="stack-col-label">🧱 HEAP  (↑성장)</div>`;
-
-    heap.forEach(blk => {
-      const headerCls = blk.freed ? 'freed-header' : '';
-      const blockCls  = blk.freed ? 'heap-block freed' : 'heap-block';
-      html += `<div class="${blockCls}">
-        <div class="heap-header ${headerCls}">
-          <span>${escHtml(blk.label)}</span>
-          <span>${blk.bytes}B</span>
-        </div>`;
-
-      blk.items.forEach(it => {
-        html += `<div class="heap-row">
-          <span class="heap-row-name">${escHtml(it.name)}</span>
-          <span class="heap-row-val" title="${escHtml(String(it.val))}">${escHtml(String(it.val))}</span>
-          <span class="heap-row-bytes">${it.bytes}B</span>
-        </div>`;
-      });
-
-      html += `<div class="heap-addr-row">${escHtml(blk.addr)}</div>
-      </div>`;
-    });
-
-    html += `</div>`;
-  }
-
-  // ── RELEASED NOTICE ──
-  if (released) {
-    html += `<div style="position:absolute;bottom:6px;left:10px;right:10px">
-      <div class="released-banner">⬇ ${escHtml(released)}</div>
-    </div>`;
-  }
-
-  // ── EMPTY STATE ──
-  if (stack.length === 0 && heap.length === 0) {
-    html = `<div class="viz-empty">
+  if (normalizedStack.length === 0 && heap.length === 0) {
+    area.style.position = 'relative';
+    area.innerHTML = `<div class="viz-empty">
       <span class="viz-empty-icon">✅</span>
       <span class="viz-empty-text">모든 메모리 해제됨</span>
       ${released ? `<span class="viz-empty-sub">${escHtml(released)}</span>` : ''}
     </div>`;
+    return;
   }
+
+  let html = '';
+  html += _renderMemMapColumn(normalizedStack);
+  html += _renderStackColumn(normalizedStack, heap);
+  html += _renderHeapAndPointers(heap, ptrLinks, released);
 
   area.style.position = 'relative';
   area.innerHTML = html;
@@ -387,6 +440,7 @@ function renderStackViz(memViz) {
 //  STEP LOGIC
 // ══════════════════════════════════════════════════════════
 function updateUI() {
+  if (!state.currentTopic || !TOPICS || !TOPICS[state.currentTopic]) return;
   const t = TOPICS[state.currentTopic];
   const total = t.steps.length;
   $(IDS.stepNum).textContent = state.stepIndex;
@@ -418,6 +472,7 @@ function updateUI() {
   }
 
   renderMemTable(state.currentTopic, step.vars || null);
+
   if (step.memViz !== undefined) {
     const memViz = step.memViz || null;
     const memChanged = !_memVizEqual(memViz, state.lastMemViz);
@@ -434,6 +489,10 @@ function updateUI() {
     if (synthetic) {
       state.lastMemViz = synthetic;
       renderStackViz(synthetic);
+    } else if (state.stepIndex === total) {
+      state.varState = {};
+      renderMemTable(state.currentTopic, null);
+      renderStackViz(null);
     } else if (state.lastMemViz) {
       renderStackViz(state.lastMemViz);
     }
@@ -575,6 +634,19 @@ function selectTopic(topicKey) {
   });
 
   const t = TOPICS[topicKey];
+  if (t && t.varTypes) {
+    const names = Object.keys(t.varTypes);
+    let base = 0x7fff5200;
+    const auto = {};
+    names.forEach((name, idx) => {
+      const type = t.varTypes[name];
+      const bytes = getTypeBytes(type);
+      const addrVal = base + idx * bytes;
+      auto[name] = '0x' + addrVal.toString(16);
+    });
+    t._autoBaseAddr = auto;
+  }
+
   $(IDS.editorTitle).textContent = t.title;
   $(IDS.tabCodeName).textContent = t.name;
   $(IDS.topTitle).textContent = t.name;
@@ -583,6 +655,50 @@ function selectTopic(topicKey) {
   clearOutput();
   renderStackViz(null);
   updateUI();
+}
+
+// ══════════════════════════════════════════════════════════
+//  CHAPTER SWITCHING
+// ══════════════════════════════════════════════════════════
+const CHAPTER_CONFIG = {
+  ch06: {
+    topicsPath: 'src/chapter06/topics.js',
+    sidebarHeader: '6장 — 조건 선택 (if / switch)',
+    defaultTopic: 'basicif',
+  },
+  ch07: {
+    topicsPath: 'src/chapter07/topics.js',
+    sidebarHeader: '7장 — 반복문 (while / do-while / for)',
+    defaultTopic: 'whilebasic',
+  },
+};
+
+function loadChapterTopics(src, callback) {
+  const old = document.getElementById('chapter-topics-script');
+  if (old) old.remove();
+  const script = document.createElement('script');
+  script.id = 'chapter-topics-script';
+  script.src = src;
+  script.onload = callback;
+  document.body.appendChild(script);
+}
+
+function selectChapter(chapterKey) {
+  const config = CHAPTER_CONFIG[chapterKey];
+  if (!config) return;
+  state.currentChapter = chapterKey;
+
+  document.querySelectorAll('.chapter-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.chapter === chapterKey);
+  });
+
+  const sidebarHeader = $(IDS.sidebarHeader);
+  if (sidebarHeader) sidebarHeader.textContent = config.sidebarHeader;
+
+  loadChapterTopics(config.topicsPath, () => {
+    renderSidebar();
+    selectTopic(config.defaultTopic);
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -611,17 +727,17 @@ function toggleTheme() {
 }
 
 // ══════════════════════════════════════════════════════════
-//  RESIZE (드래그로 패널 크기 조절)
+//  RESIZE
 // ══════════════════════════════════════════════════════════
 const RESIZE_KEYS = { rightPane: 'cdebugger-right-pane-width', panelHeights: 'cdebugger-panel-heights' };
 
-function initResize() {
-  const rightPane = document.getElementById('rightPane');
-  const resizerV = document.getElementById('resizerV');
+function initRightPaneResizer({ rightPaneId, resizerId, storageKey, minWidth, maxWidth }) {
+  const rightPane = document.getElementById(rightPaneId);
+  const resizerV = document.getElementById(resizerId);
   if (!rightPane || !resizerV) return;
 
-  let rpWidth = parseInt(localStorage.getItem(RESIZE_KEYS.rightPane) || '380', 10);
-  rpWidth = Math.max(280, Math.min(600, rpWidth));
+  let rpWidth = parseInt(localStorage.getItem(storageKey) || '380', 10);
+  rpWidth = Math.max(minWidth, Math.min(maxWidth, rpWidth));
   rightPane.style.setProperty('--right-pane-width', rpWidth + 'px');
 
   resizerV.addEventListener('mousedown', e => {
@@ -629,9 +745,11 @@ function initResize() {
     resizerV.classList.add('active');
     const startX = e.clientX;
     const startW = rightPane.offsetWidth;
-    function onMove(e) {
-      const dx = startX - e.clientX;
-      let w = Math.max(280, Math.min(600, startW + dx));
+
+    function onMove(ev) {
+      const dx = startX - ev.clientX;
+      let w = startW + dx;
+      w = Math.max(minWidth, Math.min(maxWidth, w));
       rightPane.style.setProperty('--right-pane-width', w + 'px');
     }
     function onUp() {
@@ -640,17 +758,20 @@ function initResize() {
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      localStorage.setItem(RESIZE_KEYS.rightPane, String(rightPane.offsetWidth));
+      localStorage.setItem(storageKey, String(rightPane.offsetWidth));
     }
+
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
+}
 
-  const saved = JSON.parse(localStorage.getItem(RESIZE_KEYS.panelHeights) || '{}');
-  const panels = ['panelConcept', 'panelExplain', 'panelMemViz', 'panelVars'];
-  panels.forEach(id => {
+function initPanelResizers({ panelIds, storageKey }) {
+  const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+  panelIds.forEach(id => {
     const panel = document.getElementById(id);
     if (!panel) return;
     const def = parseInt(panel.dataset.default || '120', 10);
@@ -672,9 +793,11 @@ function initResize() {
       const min = parseInt(panel.dataset.min || '60', 10);
       const startY = e.clientY;
       const startH = panel.offsetHeight;
-      function onMove(e) {
-        const dy = e.clientY - startY;
-        panel.style.height = Math.max(min, startH + dy) + 'px';
+
+      function onMove(ev) {
+        const dy = ev.clientY - startY;
+        let h = Math.max(min, startH + dy);
+        panel.style.height = h + 'px';
       }
       function onUp() {
         resizer.classList.remove('active');
@@ -682,13 +805,14 @@ function initResize() {
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
-        const saved = {};
-        panels.forEach(pid => {
+        const nextSaved = {};
+        panelIds.forEach(pid => {
           const p = document.getElementById(pid);
-          if (p) saved[pid] = p.offsetHeight;
+          if (p) nextSaved[pid] = p.offsetHeight;
         });
-        localStorage.setItem(RESIZE_KEYS.panelHeights, JSON.stringify(saved));
+        localStorage.setItem(storageKey, JSON.stringify(nextSaved));
       }
+
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'row-resize';
       document.addEventListener('mousemove', onMove);
@@ -697,13 +821,27 @@ function initResize() {
   });
 }
 
+function initResize() {
+  initRightPaneResizer({
+    rightPaneId: 'rightPane',
+    resizerId: 'resizerV',
+    storageKey: RESIZE_KEYS.rightPane,
+    minWidth: 280,
+    maxWidth: 600,
+  });
+
+  initPanelResizers({
+    panelIds: ['panelConcept', 'panelExplain', 'panelMemViz', 'panelVars'],
+    storageKey: RESIZE_KEYS.panelHeights,
+  });
+}
+
 // ══════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════
 setTheme(getTheme());
 initResize();
-renderSidebar();
-selectTopic('if_basic');
+selectChapter('ch06');
 
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;

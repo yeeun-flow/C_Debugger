@@ -375,6 +375,37 @@ function _renderHeapAndPointers(heap, ptrLinks, released) {
 }
 
 // ══════════════════════════════════════════════════════════
+//  VARSTATE → MEMVIZ (memViz 없는 스텝에서 변수 할당 시 메모리 맵 표시)
+// ══════════════════════════════════════════════════════════
+function buildMemVizFromVarState(topic, varState) {
+  const t = topic;
+  if (!t || !t.varTypes || !varState || Object.keys(varState).length === 0) return null;
+  const addrs = (t._autoBaseAddr || t.baseAddr || {});
+  const varNames = Object.keys(t.varTypes);
+  const vars = varNames
+    .filter(name => {
+      const v = varState[name];
+      const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
+      return v !== undefined && val !== '—';
+    })
+    .map(name => {
+      const v = varState[name];
+      const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
+      const type = t.varTypes[name] || 'int';
+      const bytes = getTypeBytes(type);
+      const addr = addrs[name] || '0x7fff????';
+      return { name, type, bytes, val, addr, highlight: false };
+    });
+  if (vars.length === 0) return null;
+  const totalBytes = vars.reduce((a, v) => a + v.bytes, 0) + 16;
+  return {
+    stack: [{ fn: 'main', color: 'main', vars, retAddr: '0x400640' }],
+    heap: [],
+    totalBytes,
+  };
+}
+
+// ══════════════════════════════════════════════════════════
 //  STACK VISUALIZER RENDERER
 // ══════════════════════════════════════════════════════════
 function renderStackViz(memViz) {
@@ -466,11 +497,19 @@ function updateUI() {
       state.varState = {};
       renderMemTable(state.currentTopic, null);
     }
-  } else if (state.stepIndex === total) {
-    // memViz를 사용하지 않는 토픽(CH06 등)에서는 마지막 step에서 변수/메모리 뷰를 초기화
-    state.varState = {};
-    renderMemTable(state.currentTopic, null);
-    renderStackViz(null);
+  } else {
+    // memViz가 없는 스텝: varState 기반으로 synthetic memViz 생성 → 변수 할당 시 메모리 맵 표시
+    const synthetic = buildMemVizFromVarState(t, state.varState);
+    if (synthetic) {
+      state.lastMemViz = synthetic;
+      renderStackViz(synthetic);
+    } else if (state.stepIndex === total) {
+      state.varState = {};
+      renderMemTable(state.currentTopic, null);
+      renderStackViz(null);
+    } else if (state.lastMemViz) {
+      renderStackViz(state.lastMemViz);
+    }
   }
 }
 
@@ -511,7 +550,8 @@ function stepBack() {
     if (t.steps[i].memViz) lastMemViz = t.steps[i].memViz;
   }
   state.lastMemViz = lastMemViz;
-  renderStackViz(lastMemViz);
+  const toShow = lastMemViz || buildMemVizFromVarState(t, state.varState);
+  renderStackViz(toShow);
   updateUI();
 }
 
@@ -528,13 +568,12 @@ function runAll() {
     if (step.memViz) lastMemViz = step.memViz;
   }
   renderOutput(state.outputLines, '// 출력 없음');
-  state.lastMemViz = lastMemViz;
-  if (lastMemViz) {
-    renderStackViz(lastMemViz);
-    if (lastMemViz.stack && lastMemViz.stack.length === 0 && (!lastMemViz.heap || lastMemViz.heap.length === 0)) {
-      state.varState = {};
-      renderMemTable(state.currentTopic, null);
-    }
+  const toShow = lastMemViz || buildMemVizFromVarState(t, state.varState);
+  state.lastMemViz = toShow || lastMemViz;
+  if (toShow) renderStackViz(toShow);
+  if (lastMemViz && lastMemViz.stack && lastMemViz.stack.length === 0 && (!lastMemViz.heap || lastMemViz.heap.length === 0)) {
+    state.varState = {};
+    renderMemTable(state.currentTopic, null);
   }
   updateUI();
 }

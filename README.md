@@ -1,7 +1,7 @@
 ## C Debugger — C 제어문/메모리 학습 도구
 
 브라우저에서 C 언어 제어문과 메모리를 **한 스텝씩 시각화**하면서 학습할 수 있는 작은 웹 프로젝트입니다.  
-조건문(if / switch), 중첩 if, 점수/학점 분기 등 6장 예제를 따라가며 **코드 실행 흐름 + 스택 메모리 상태**를 동시에 볼 수 있습니다.
+조건문(if / switch), 반복문(while / for), 점프문(break / continue / goto) 등 6·7장 예제를 따라가며 **코드 실행 흐름 + 스택 메모리 상태**를 동시에 볼 수 있습니다.
 
 ---
 
@@ -11,6 +11,10 @@
   - 6장(조건 선택) 디버거의 단일 HTML 엔트리입니다.  
   - 상단 Topbar, 사이드바, 에디터 영역, 우측 패널(개념/현재 실행/메모리 맵/변수 테이블/출력) 레이아웃을 정의합니다.
   - 스크립트로 `src/chapter06/topics.js`, `src/chapter06/debugger.js`를 로드합니다.
+
+- **`src/chapter07/index.html`**  
+  - 7장(반복문) 디버거 엔트리입니다.  
+  - while, do-while, for, break, continue, goto, 중첩 for, 실습 예제를 포함합니다.
 
 - **`src/chapter06/topics.js`**  
   - 6장에 등장하는 각 예제 코드를 **데이터로 정의**하는 파일입니다.
@@ -86,16 +90,19 @@
 
 3. **메모리 맵/변수 테이블 동기화**
    - 변수 테이블은 `state.varState`를 기준으로, 메모리 맵은 `memViz` + `varState`를 합쳐 렌더링합니다.
-   - 예를 들어 `scanf` 이후 스텝에서 `vars: { score: 85 }`, `memViz`가 함께 정의되어 있으면:
-     - 변수 테이블은 `score = 85`로 갱신되고,
-     - 메모리 맵에서는 해당 주소에 `0x55 0x00 0x00 0x00` 같은 헥사 바이트가 표시됩니다.
+   - **`memViz`가 있는 스텝**: 해당 스텝의 `memViz`를 그대로 사용합니다.
+   - **`memViz`가 없는 스텝**: `buildMemVizFromVarState(topic, varState)`로 **synthetic memViz**를 생성하여 메모리 맵에 표시합니다.  
+     → 변수가 할당되면(`vars` 업데이트) 메모리 맵에도 자동으로 반영됩니다.
+   - 예: `scanf` 이후 `vars: { score: 85 }`만 있어도, `varTypes`·`baseAddr`를 이용해 main 스택 프레임을 만들고 헥사 바이트를 표시합니다.
 
 ---
 
 ### 브라우저에서 실행 방법
 
 1. 이 리포지토리를 클론합니다.
-2. 로컬에서 `ch06.html`을 브라우저(Chrome 등)로 직접 열면 됩니다.
+2. 로컬에서 HTML 파일을 브라우저(Chrome 등)로 직접 열면 됩니다.
+   - **6장**: `ch06.html` 또는 `src/chapter06/index.html`
+   - **7장**: `src/chapter07/index.html`
    - 예: 파일 탐색기에서 더블 클릭, 또는 VS Code의 “Open with Live Server” 등 사용.
 3. 좌측에서 토픽을 선택하고 `Step` 버튼으로 한 줄씩 실행 흐름과 메모리를 따라가 보세요.
 
@@ -106,15 +113,15 @@
 ### 다른 장(chapter)으로 확장 시 가이드
 
 - 공통으로 재사용 가능한 부분
-  - 메모리/스택 렌더링 로직 (`valToHexBytes`, `_buildNormalizedStackFrames`, `_renderMemMapColumn`, `_renderStackColumn`, `_renderHeapAndPointers`, `renderStackViz`)
+  - 메모리/스택 렌더링 로직 (`buildMemVizFromVarState`, `valToHexBytes`, `_buildNormalizedStackFrames`, `_renderMemMapColumn`, `_renderStackColumn`, `_renderHeapAndPointers`, `renderStackViz`)
   - Step 진행 및 상태 관리 (`state`, `updateUI`, `stepForward`, `stepBack`, `runAll`, `resetDebug`)
   - 리사이저 유틸 (`initRightPaneResizer`, `initPanelResizers`, `initResize`)
   - 테마 토글 및 사이드바 렌더링 틀 (`renderSidebar`, `toggleTheme` 계열)
 
 - 장별로 교체/추가해야 할 부분
   - `TOPIC_META`, `TOPICS` 데이터 정의 (각 장의 예제 코드, 설명, 스텝 정보)
-  - HTML 엔트리 파일(예: `ch07.html`)의 레이아웃/텍스트(Topbar 라벨, 제목 등)
+  - HTML 엔트리 파일(예: `src/chapter07/index.html`)의 레이아웃/텍스트(Topbar 라벨, 제목 등)
   - 필요 시, 해당 장만의 특수한 메모리 표현(예: 포인터/동적 메모리/배열 등)에 대한 `memViz` 구조 확장
 
-이 구조를 그대로 복사해 `src/chapter07/`, `ch07.html` 등을 만들면, **공통 디버거 엔진 + 장별 데이터** 패턴으로 쉽게 확장할 수 있도록 설계되어 있습니다.
+이 구조를 그대로 복사해 `src/chapter07/` 등을 만들면, **공통 디버거 엔진 + 장별 데이터** 패턴으로 쉽게 확장할 수 있도록 설계되어 있습니다.
 

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════
 //  TOPIC_META: 6장 조건 선택 (if / switch)
 // ══════════════════════════════════════════════════════════
-const TOPIC_META = [
+window.TOPIC_META = [
   { group: 'if 문', key: 'basicif', label: '01basicif', sub: '폭염 주의보', icon: '🌡', isSub: false },
   { group: 'if 문', key: 'evenifelse', label: '02evenifelse', tag: 'BUG', tagStyle: 'red', isSub: true },
   { group: 'if 문', key: 'gpa', label: '03addsub', sub: 'GPA 구분', icon: '📊', isSub: false },
@@ -19,7 +19,7 @@ const TOPIC_META = [
 //  DATA: 각 토픽 정의
 // ══════════════════════════════════════════════════════════
 
-const TOPICS = {
+window.TOPICS = {
 
   // ── 01basicif: 폭염 주의보 ─────────────────────────────
   basicif: {

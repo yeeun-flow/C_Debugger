@@ -1,12 +1,21 @@
 ---
 description: topics.js 토픽 데이터 구조 및 추가 방법
-globs: topics.js
+globs: "**/topics.js"
 alwaysApply: false
 ---
 
 # TOPICS 데이터 형식
 
-새 토픽 추가 시 `TOPICS` 객체에 다음 구조를 따르세요.
+새 토픽 추가 시 `TOPIC_META` + `TOPICS`에 함께 추가하세요.
+
+## TOPIC_META (사이드바용)
+
+```javascript
+const TOPIC_META = [
+  { group: '그룹명', key: 'topic_key', label: '라벨', sub: '부제', icon: '🌀', isSub: false },
+  // isSub: true 시 들여쓰기. tag, tagStyle (선택)
+];
+```
 
 ## 토픽 객체 필드
 
@@ -15,6 +24,7 @@ TOPICS.topic_key = {
   name: '파일명.c',           // 탭/상단 표시
   title: '표시 제목',          // 에디터 헤더
   concept: `<b>HTML</b>...`,  // 개념 설명 (HTML 허용)
+  varTypes: { x: 'int' },     // 변수별 타입 (필수, 메모리 맵/테이블용)
   vars: { x: null },          // 변수 초기 상태 (선택)
   baseAddr: { x: '0x7fff5200' },  // 변수별 주소 (선택)
   code: [...],                // 코드 라인 배열
@@ -28,9 +38,11 @@ TOPICS.topic_key = {
 - `id`: 라인 식별자 (steps에서 참조)
 - `text`: HTML 문자열 (span class로 문법 하이라이트)
 - `blank: true`: 빈 줄/주석용
+- `indent`: 1, 2 등 (선택, 들여쓰기 레벨 표시용)
 
 ```javascript
 { id: 'decl', text: `    <span class="ty">int</span> <span class="vr">x</span> = <span class="nm">42</span>;` },
+{ id: 'pr', text: `        <span class="fn-c">printf</span>(...);`, indent: 1 },
 { text: ``, blank: true }
 ```
 
@@ -41,7 +53,7 @@ TOPICS.topic_key = {
 각 스텝 객체:
 - `line`: code의 `id` (현재 실행 라인)
 - `type`: `'exec'` | `'skip'`
-- `vars`: 변수 상태 업데이트 `{ x: 42 }`
+- `vars`: 변수 상태 업데이트 `{ x: 42 }` — `'—'` 사용 금지, 없으면 키 생략
 - `explain`: 설명 HTML
 - `output`: printf 출력 문자열 (선택)
 - `cond`: 조건 결과 `true` | `false` (조건문 시)
@@ -54,12 +66,14 @@ memViz: {
   stack: [{ fn:'main', color:'main', vars:[...], retAddr:'0x400640' }],
   heap: [{ label:'malloc(4)', addr:'0x55a3c020', bytes:4, items:[...], freed:false }],
   totalBytes: 20,
-  released: '해제 메시지',  // 선택
+  released: '해제 메시지',  // 선택 (예: 'main 프레임 해제')
   ptrLinks: [{ from:'p', toName:'x', toAddr:'0x7fff5208' }]  // 포인터 시각화
 }
 ```
 
-## 변수 타입 매핑
+마지막 `return` 스텝: `memViz: { stack: [], heap: [], totalBytes: 0, released: 'main 프레임 해제' }`
 
-`debugger.js`의 `renderMemTable`에 `typeMap` 추가 필요:
-`{ 변수명: 'int' }` 등
+## 변수 타입
+
+토픽에 `varTypes: { 변수명: 'int' | 'double' | 'int*' }` 를 정의.  
+`debugger.js`가 이를 사용해 메모리 테이블·메모리 맵을 렌더링함.
