@@ -32,6 +32,7 @@ const state = {
   stepIndex: 0,
   outputLines: [],
   triangleLineOpen: false,
+  sidebarGroupCollapsed: {},
   varState: {},
   lastMemViz: null,  // 이전 스텝 메모리 (동일 시 업데이트 생략)
 };
@@ -626,9 +627,13 @@ function renderSidebar() {
 
   TOPIC_META.forEach(item => {
     if (item.group !== currentGroup) {
-      if (currentGroup) html += '</div>';
+      if (currentGroup) html += '</div></div>';
       currentGroup = item.group;
-      html += `<div class="sidebar-group"><div class="sidebar-group-label">${currentGroup}</div>`;
+      const collapsed = !!state.sidebarGroupCollapsed[currentGroup];
+      const caret = collapsed ? '▸' : '▾';
+      html += `<div class="sidebar-group" data-group="${escHtml(currentGroup)}">
+        <div class="sidebar-group-label sidebar-group-toggle" data-group-toggle="${escHtml(currentGroup)}">${caret} ${escHtml(currentGroup)}</div>
+        <div class="sidebar-group-items" ${collapsed ? 'style="display:none"' : ''}>`;
     }
 
     if (item.isSub) {
@@ -649,8 +654,24 @@ function renderSidebar() {
     }
   });
 
-  if (currentGroup) html += '</div>';
+  if (currentGroup) html += '</div></div>';
   container.innerHTML = html;
+
+  // 현재 토픽 active 상태 복원
+  document.querySelectorAll('.sidebar-item, .sidebar-subitem').forEach(el => {
+    el.classList.remove('active');
+    if (el.dataset.topic === state.currentTopic) el.classList.add('active');
+  });
+
+  // 그룹 토글 핸들러 연결
+  container.querySelectorAll('.sidebar-group-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const group = el.dataset.groupToggle;
+      if (!group) return;
+      state.sidebarGroupCollapsed[group] = !state.sidebarGroupCollapsed[group];
+      renderSidebar();
+    });
+  });
 }
 
 // ══════════════════════════════════════════════════════════
