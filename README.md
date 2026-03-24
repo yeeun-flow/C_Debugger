@@ -7,10 +7,10 @@
 
 ### 프로젝트 구조
 
-- **`ch06.html`**  
-  - 6장(조건 선택) 디버거의 단일 HTML 엔트리입니다.  
+- **`src/chapter06/index.html`**  
+  - 6장(조건 선택) 디버거 엔트리입니다.  
   - 상단 Topbar, 사이드바, 에디터 영역, 우측 패널(개념/현재 실행/메모리 맵/변수 테이블/출력) 레이아웃을 정의합니다.
-  - 스크립트로 `src/chapter06/topics.js`, `src/chapter06/debugger.js`를 로드합니다.
+  - 스크립트로 `topics.js`, `../shared/debugger.js`를 로드합니다.
 
 - **`src/chapter07/index.html`**  
   - 7장(반복문) 디버거 엔트리입니다.  
@@ -34,7 +34,7 @@
         - `cond`: 조건식 결과 (`true`/`false`) — 현재 실행 패널의 뱃지에 사용
         - `memViz`: 스택/힙 메모리 맵을 시각화하기 위한 구조화된 데이터
 
-- **`src/chapter06/debugger.js`**  
+- **`src/shared/debugger.js`**  
   - 화면 렌더링과 Step 진행을 담당하는 **핵심 로직**입니다.
   - 주요 구성:
     - 전역 `state`: 현재 토픽 키, 현재 스텝 인덱스, 출력 라인, 변수 상태(`varState`), 마지막 메모리 스냅샷(`lastMemViz`)을 관리합니다.
@@ -101,7 +101,7 @@
 
 1. 이 리포지토리를 클론합니다.
 2. 로컬에서 HTML 파일을 브라우저(Chrome 등)로 직접 열면 됩니다.
-   - **6장**: `ch06.html` 또는 `src/chapter06/index.html`
+   - **6장**: `src/chapter06/index.html`
    - **7장**: `src/chapter07/index.html`
    - 예: 파일 탐색기에서 더블 클릭, 또는 VS Code의 “Open with Live Server” 등 사용.
 3. 좌측에서 토픽을 선택하고 `Step` 버튼으로 한 줄씩 실행 흐름과 메모리를 따라가 보세요.

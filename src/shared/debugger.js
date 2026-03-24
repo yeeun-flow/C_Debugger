@@ -28,9 +28,10 @@ const IDS = {
 //  STATE
 // ══════════════════════════════════════════════════════════
 const state = {
-  currentTopic: 'basicif',
+  currentTopic: '',
   stepIndex: 0,
   outputLines: [],
+  triangleLineOpen: false,
   varState: {},
   lastMemViz: null,  // 이전 스텝 메모리 (동일 시 업데이트 생략)
 };
@@ -159,12 +160,31 @@ function renderMemTable(topic, newVars) {
 // ══════════════════════════════════════════════════════════
 function appendOutput(text) {
   if (!text) return;
+  if (state.currentTopic === 'triangle') {
+    if (text === '*') {
+      if (!state.triangleLineOpen || state.outputLines.length === 0) {
+        state.outputLines.push({ text: '*' });
+      } else {
+        const last = state.outputLines[state.outputLines.length - 1];
+        last.text += '*';
+      }
+      state.triangleLineOpen = true;
+      renderOutput(state.outputLines);
+      return;
+    }
+    if (text === '\n') {
+      state.triangleLineOpen = false;
+      renderOutput(state.outputLines);
+      return;
+    }
+  }
   state.outputLines.push({ text });
   renderOutput(state.outputLines);
 }
 
 function clearOutput() {
   state.outputLines = [];
+  state.triangleLineOpen = false;
   renderOutput([], '// 실행 결과가 여기 표시됩니다');
 }
 
@@ -386,7 +406,7 @@ function buildMemVizFromVarState(topic, varState) {
     .filter(name => {
       const v = varState[name];
       const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
-      return v !== undefined && val !== '—';
+      return v !== undefined && val !== '—';  // '—'는 "해당 없음" 표시 → 메모리 맵 제외
     })
     .map(name => {
       const v = varState[name];
@@ -570,7 +590,9 @@ function runAll() {
   renderOutput(state.outputLines, '// 출력 없음');
   const toShow = lastMemViz || buildMemVizFromVarState(t, state.varState);
   state.lastMemViz = toShow || lastMemViz;
-  if (toShow) renderStackViz(toShow);
+  if (toShow) {
+    renderStackViz(toShow);
+  }
   if (lastMemViz && lastMemViz.stack && lastMemViz.stack.length === 0 && (!lastMemViz.heap || lastMemViz.heap.length === 0)) {
     state.varState = {};
     renderMemTable(state.currentTopic, null);
@@ -816,9 +838,14 @@ function initResize() {
 setTheme(getTheme());
 initResize();
 renderSidebar();
-selectTopic('basicif');
-renderSidebar();
-selectTopic('basicif');
+const requestedDefaultTopic = window.CDEBUG_DEFAULT_TOPIC;
+const resolvedDefaultTopic =
+  (requestedDefaultTopic && TOPICS[requestedDefaultTopic])
+    ? requestedDefaultTopic
+    : Object.keys(TOPICS)[0];
+if (resolvedDefaultTopic) {
+  selectTopic(resolvedDefaultTopic);
+}
 
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
