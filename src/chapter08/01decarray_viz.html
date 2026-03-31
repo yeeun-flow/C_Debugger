@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01decarray.c — 메모리 적재 시각화</title>
+<style>
+  :root {
+    --bg0: #0d1117;
+    --bg1: #161b22;
+    --bg2: #1c2128;
+    --bg3: #21262d;
+    --bg4: #30363d;
+    --text1: #e6edf3;
+    --text2: #8b949e;
+    --text3: #484f58;
+    --accent-b: #388bfd;
+    --accent-g: #3fb950;
+    --accent-y: #d29922;
+    --accent-r: #f85149;
+    --accent-p: #bc8cff;
+    --hl-exec: rgba(56, 139, 253, 0.15);
+    --hl-exec-border: rgba(56, 139, 253, 0.5);
+    --changed: rgba(61, 185, 80, 0.18);
+    --changed-border: rgba(61, 185, 80, 0.6);
+    --highlight-mem: rgba(210, 153, 34, 0.22);
+    --highlight-mem-border: rgba(210, 153, 34, 0.8);
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg0); color: var(--text1); font-family: var(--font-sans); }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 20px; background: var(--bg1);
+    border-bottom: 1px solid var(--bg4);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar .badge { background: var(--accent-b); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: .5px; }
+  .topbar .title { font-size: 14px; font-weight: 600; color: var(--text1); }
+  .topbar .subtitle { font-size: 12px; color: var(--text2); }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr auto;
+    height: calc(100vh - 49px);
+    gap: 0;
+  }
+
+  /* ── LEFT PANEL ── */
+  .left-panel {
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--bg4);
+    overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; background: var(--bg1);
+    border-bottom: 1px solid var(--bg4);
+    font-size: 11px; font-weight: 600; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .8px;
+    flex-shrink: 0;
+  }
+  .panel-head .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-blue { background: var(--accent-b); }
+  .dot-green { background: var(--accent-g); }
+  .dot-yellow { background: var(--accent-y); }
+  .dot-purple { background: var(--accent-p); }
+  .dot-red { background: var(--accent-r); }
+
+  .code-area {
+    flex: 1; overflow-y: auto;
+    padding: 12px 0; font-family: var(--font-mono); font-size: 13px;
+    line-height: 1.7;
+  }
+  .code-line {
+    display: flex; align-items: center;
+    padding: 1px 0; border-left: 3px solid transparent;
+    transition: background .15s, border-color .15s;
+  }
+  .code-line.hl-exec {
+    background: var(--hl-exec);
+    border-left-color: var(--accent-b);
+  }
+  .line-gutter {
+    display: flex; align-items: center; justify-content: flex-end;
+    width: 52px; padding-right: 8px; flex-shrink: 0;
+    color: var(--text3); font-size: 12px; gap: 4px;
+  }
+  .line-num { min-width: 20px; text-align: right; }
+  .exec-arrow { width: 12px; color: var(--accent-b); font-size: 10px; }
+  .line-code { padding-left: 6px; white-space: pre; color: var(--text1); }
+
+  /* syntax colors */
+  .kw  { color: #ff7b72; }
+  .ty  { color: #79c0ff; }
+  .fn-c{ color: #d2a8ff; }
+  .nm  { color: #79c0ff; }
+  .st  { color: #a5d6ff; }
+  .pp  { color: #ff7b72; }
+  .vr  { color: #ffa657; }
+  .cm  { color: var(--text3); font-style: italic; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    padding: 12px 14px; border-top: 1px solid var(--bg4);
+    background: var(--bg1); flex-shrink: 0;
+  }
+  .ctrl-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .btn {
+    padding: 6px 16px; border-radius: 6px; border: 1px solid var(--bg4);
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    background: var(--bg3); color: var(--text1);
+    transition: background .15s, border-color .15s;
+    font-family: var(--font-mono);
+  }
+  .btn:hover { background: var(--bg4); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-primary { background: var(--accent-b); color: #fff; border-color: var(--accent-b); }
+  .btn-primary:hover { background: #1a7fe0; }
+  .step-info { font-size: 12px; color: var(--text2); }
+  .step-num  { color: var(--accent-b); font-weight: 700; }
+  .progress-bar {
+    height: 3px; background: var(--bg4); border-radius: 2px; overflow: hidden; margin-bottom: 10px;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent-b); border-radius: 2px;
+    transition: width .3s ease;
+  }
+  .explain-box {
+    background: var(--bg2); border: 1px solid var(--bg4);
+    border-radius: 6px; padding: 8px 12px;
+    font-size: 12px; line-height: 1.6; color: var(--text2); min-height: 38px;
+  }
+  .explain-box b { color: var(--text1); }
+  .explain-box code { color: var(--accent-y); font-family: var(--font-mono); font-size: 11px; }
+
+  /* ── RIGHT PANEL ── */
+  .right-panel {
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .right-scroll { flex: 1; overflow-y: auto; }
+
+  /* ── MEMORY MAP ── */
+  .mem-section { padding: 14px; border-bottom: 1px solid var(--bg4); }
+  .section-title {
+    font-size: 10px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: .8px; margin-bottom: 10px;
+  }
+
+  .stack-frame {
+    border: 1px solid var(--bg4); border-radius: 6px; overflow: hidden;
+  }
+  .frame-header {
+    background: var(--bg3); padding: 5px 10px;
+    font-size: 11px; font-weight: 600; color: var(--text2);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .frame-fn { color: var(--accent-p); }
+  .frame-ret { font-size: 10px; color: var(--text3); font-family: var(--font-mono); }
+
+  .mem-cells {
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .mem-cell {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr;
+    align-items: center;
+    padding: 5px 10px;
+    border-top: 1px solid var(--bg4);
+    font-family: var(--font-mono); font-size: 12px;
+    transition: background .25s, border-left-color .25s;
+    border-left: 3px solid transparent;
+  }
+  .mem-cell.allocated {
+    animation: cellIn .3s ease forwards;
+  }
+  .mem-cell.changed {
+    background: var(--highlight-mem);
+    border-left-color: var(--accent-y);
+  }
+  .mem-cell.garbage .mem-val { color: var(--accent-r); opacity: .6; }
+  .mem-cell .mem-addr { color: var(--text3); font-size: 11px; }
+  .mem-cell .mem-name { color: var(--accent-y); font-size: 12px; }
+  .mem-cell .mem-val  { color: var(--accent-g); font-size: 13px; font-weight: 600; text-align: right; }
+  .mem-divider { height: 1px; background: var(--bg3); }
+
+  @keyframes cellIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── VAR TABLE ── */
+  .var-section { padding: 14px; border-bottom: 1px solid var(--bg4); }
+  .var-table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .var-table th {
+    text-align: left; padding: 4px 8px;
+    color: var(--text3); font-size: 10px; text-transform: uppercase;
+    letter-spacing: .5px; border-bottom: 1px solid var(--bg4);
+  }
+  .var-table td { padding: 5px 8px; border-bottom: 1px solid var(--bg3); }
+  .var-table tr.changed-row td { background: var(--changed); }
+  .var-table tr.changed-row td:first-child { border-left: 3px solid var(--accent-g); }
+  .var-table tr td:first-child { border-left: 3px solid transparent; }
+  .td-name  { color: var(--accent-y); }
+  .td-type  { color: var(--accent-b); }
+  .td-addr  { color: var(--text3); font-size: 11px; }
+  .td-val   { color: var(--accent-g); font-weight: 600; }
+  .td-val.garbage { color: var(--accent-r); opacity: .7; }
+  .empty-row td { color: var(--text3); font-size: 11px; padding: 8px; }
+
+  /* ── OUTPUT ── */
+  .out-section { padding: 14px; }
+  .output-area {
+    background: var(--bg2); border: 1px solid var(--bg4);
+    border-radius: 6px; padding: 10px 12px;
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.8;
+    min-height: 60px; max-height: 160px; overflow-y: auto;
+    color: var(--accent-g);
+    white-space: pre-wrap;
+  }
+  .output-dim { color: var(--text3); font-size: 11px; }
+  .output-line { display: block; }
+  .output-cur { color: var(--accent-y); }
+
+  /* ── CONCEPT BANNER ── */
+  .concept-banner {
+    margin: 14px; padding: 10px 14px;
+    background: var(--bg2); border: 1px solid var(--bg4);
+    border-left: 3px solid var(--accent-b);
+    border-radius: 6px; font-size: 12px; line-height: 1.65; color: var(--text2);
+  }
+  .concept-banner b { color: var(--text1); }
+  .concept-banner code { color: var(--accent-y); font-family: var(--font-mono); font-size: 11px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="badge">CH08</span>
+  <span class="title">01decarray.c</span>
+  <span class="subtitle">— 배열 선언·스택 적재·쓰레기 값 시각화</span>
+</div>
+
+<div class="main">
+  <!-- LEFT: CODE + CONTROLS -->
+  <div class="left-panel">
+    <div class="panel-head">
+      <span class="dot dot-blue"></span>
+      소스 코드
+    </div>
+    <div class="code-area" id="codeArea"></div>
+    <div class="controls">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="ctrl-row">
+        <button class="btn" id="btnPrev" onclick="stepBack()">◀ Prev</button>
+        <button class="btn btn-primary" id="btnStep" onclick="stepForward()">Step ▶</button>
+        <button class="btn" id="btnRun" onclick="runAll()">▷ Run All</button>
+        <button class="btn" onclick="resetDebug()">↺ Reset</button>
+        <span class="step-info">
+          Step <span class="step-num" id="stepNum">0</span> / <span id="stepTotal">0</span>
+        </span>
+      </div>
+      <div class="explain-box" id="explainBox">
+        ← Step 버튼을 눌러 실행을 시작하세요 &nbsp;&nbsp; <span style="color:var(--text3);font-size:11px">키보드: ← → 방향키 | r 리셋</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: MEMORY + VARS + OUTPUT -->
+  <div class="right-panel">
+    <div class="right-scroll">
+      <div class="concept-banner" id="conceptBanner">
+        <b>int score[SIZE];</b> — 연속된 <b>int × 5</b> 바이트 블록이 스택 프레임에 할당됩니다.<br>
+        초기화하지 않은 원소에는 <b>쓰레기 값</b>이 들어 있을 수 있습니다.
+        이 시뮬에서는 <code>score[3]</code>을 <b style="color:#f85149">???</b> 로 표시합니다.
+      </div>
+
+      <!-- MEMORY MAP -->
+      <div class="mem-section">
+        <div class="section-title">
+          <span class="dot dot-yellow" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;"></span>
+          스택 메모리 맵
+        </div>
+        <div class="stack-frame" id="stackFrame">
+          <div class="frame-header">
+            <span><span class="frame-fn">main()</span> 스택 프레임</span>
+            <span class="frame-ret">ret: 0x400640</span>
+          </div>
+          <div class="mem-cells" id="memCells">
+            <div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">
+              — 아직 변수가 선언되지 않았습니다 —
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VAR TABLE -->
+      <div class="var-section">
+        <div class="section-title">
+          <span class="dot dot-green" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;"></span>
+          변수 상태
+        </div>
+        <table class="var-table">
+          <thead>
+            <tr>
+              <th>변수명</th>
+              <th>타입</th>
+              <th>주소</th>
+              <th>값</th>
+            </tr>
+          </thead>
+          <tbody id="varTableBody">
+            <tr class="empty-row"><td colspan="4">— 아직 변수 없음 —</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- OUTPUT -->
+      <div class="out-section">
+        <div class="section-title">
+          <span class="dot dot-purple" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;"></span>
+          출력 결과
+        </div>
+        <div class="output-area" id="outputArea">
+          <span class="output-dim">// 실행 결과가 여기 표시됩니다</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  CODE LINES
+// ══════════════════════════════════════════════════════
+const CODE_LINES = [
+  { text: `<span class="pp">#include</span> <span class="st">&lt;stdio.h&gt;</span>` },
+  { text: `` },
+  { text: `<span class="pp">#define</span> SIZE <span class="nm">5</span>` },
+  { text: `` },
+  { text: `<span class="ty">int</span> <span class="fn-c">main</span>(<span class="ty">void</span>) {` },
+  { id: 'decl', text: `    <span class="ty">int</span> <span class="vr">score</span>[SIZE]; <span class="cm">// int score[5];</span>` },
+  { text: `` },
+  { id: 'a0',   text: `    <span class="vr">score</span>[<span class="nm">0</span>] = <span class="nm">78</span>;` },
+  { id: 'a1',   text: `    <span class="vr">score</span>[<span class="nm">1</span>] = <span class="nm">97</span>;` },
+  { id: 'a2',   text: `    <span class="vr">score</span>[<span class="nm">2</span>] = <span class="nm">85</span>;` },
+  { text: `    <span class="cm">// score[3] — 대입 없음 → 쓰레기 값</span>` },
+  { id: 'a4',   text: `    <span class="vr">score</span>[<span class="nm">4</span>] = <span class="nm">91</span>;` },
+  { text: `` },
+  { id: 'forh', text: `    <span class="kw">for</span> (<span class="ty">int</span> <span class="vr">i</span> = <span class="nm">0</span>; <span class="vr">i</span> &lt; SIZE; <span class="vr">i</span>++)` },
+  { id: 'pr',   text: `        <span class="fn-c">printf</span>(<span class="st">"%d  "</span>, <span class="vr">score</span>[<span class="vr">i</span>]);` },
+  { id: 'nl',   text: `    <span class="fn-c">printf</span>(<span class="st">"\\n"</span>);` },
+  { text: `` },
+  { id: 'ret',  text: `    <span class="kw">return</span> <span class="nm">0</span>;` },
+  { text: `}` },
+];
+
+// ══════════════════════════════════════════════════════
+//  STEP DATA
+//  mem: array of { name, addr, val, highlight }
+//  i variable included when relevant
+// ══════════════════════════════════════════════════════
+const BASE = 0x7fff5200;
+function scoreAddr(k) { return '0x' + (BASE + k * 4).toString(16); }
+const I_ADDR = '0x7fff5214';
+
+function makeScore(vals, hi) {
+  return vals.map((v, k) => ({
+    name: `score[${k}]`,
+    type: 'int',
+    addr: scoreAddr(k),
+    val: v,
+    highlight: hi === k,
+  }));
+}
+
+const STEPS = [
+  {
+    line: 'decl', type: 'exec',
+    explain: '<b>int score[SIZE];</b> — 스택에 <b>int × 5 = 20 바이트</b> 연속 블록이 할당됩니다. 아직 값이 기록되지 않아 모든 원소는 <b style="color:#f85149">???</b>(쓰레기 값)입니다.',
+    mem: makeScore(['???','???','???','???','???'], null),
+    vars: { 'score[0]':'???','score[1]':'???','score[2]':'???','score[3]':'???','score[4]':'???' },
+    output: null,
+  },
+  {
+    line: 'a0', type: 'exec',
+    explain: '<b>score[0] = 78</b> — 첫 번째 원소(<code>score[0]</code>, addr <code>0x7fff5200</code>)에 값 78이 기록됩니다.',
+    mem: makeScore([78,'???','???','???','???'], 0),
+    vars: { 'score[0]': 78 },
+    output: null,
+  },
+  {
+    line: 'a1', type: 'exec',
+    explain: '<b>score[1] = 97</b> — <code>score[1]</code>(<code>0x7fff5204</code>)에 97 기록.',
+    mem: makeScore([78, 97,'???','???','???'], 1),
+    vars: { 'score[1]': 97 },
+    output: null,
+  },
+  {
+    line: 'a2', type: 'exec',
+    explain: '<b>score[2] = 85</b> — <code>score[2]</code>(<code>0x7fff5208</code>)에 85 기록.',
+    mem: makeScore([78, 97, 85,'???','???'], 2),
+    vars: { 'score[2]': 85 },
+    output: null,
+  },
+  {
+    line: 'a4', type: 'exec',
+    explain: '<b>score[4] = 91</b> — <code>score[4]</code>(<code>0x7fff520c</code>)에 91 기록. <code>score[3]</code>은 여전히 <b style="color:#f85149">쓰레기 값</b>.',
+    mem: makeScore([78, 97, 85,'???', 91], 4),
+    vars: { 'score[4]': 91 },
+    output: null,
+  },
+  {
+    line: 'forh', type: 'exec',
+    explain: '<b>for</b> 초기화 — <code>i = 0</code> 선언, 조건 <code>i &lt; 5</code> → 참, 본문으로 진입.',
+    mem: makeScore([78, 97, 85,'???', 91], null).concat([
+      { name:'i', type:'int', addr: I_ADDR, val: 0, highlight: true }
+    ]),
+    vars: { i: 0 },
+    output: null,
+  },
+  {
+    line: 'pr', type: 'exec',
+    explain: '<b>printf("%d  ", score[0])</b> — <code>i=0</code>, <code>score[0]=78</code> 출력.',
+    mem: null,
+    vars: {},
+    output: '78  ',
+  },
+  {
+    line: 'forh', type: 'exec',
+    explain: '<b>i++</b> → <code>i=1</code>, 조건 참.',
+    mem: makeScore([78, 97, 85,'???', 91], null).concat([
+      { name:'i', type:'int', addr: I_ADDR, val: 1, highlight: true }
+    ]),
+    vars: { i: 1 },
+    output: null,
+  },
+  {
+    line: 'pr', type: 'exec',
+    explain: '<b>printf</b> — <code>i=1</code>, <code>score[1]=97</code> 출력.',
+    mem: null,
+    vars: {},
+    output: '97  ',
+  },
+  {
+    line: 'forh', type: 'exec',
+    explain: '<b>i++</b> → <code>i=2</code>, 조건 참.',
+    mem: makeScore([78, 97, 85,'???', 91], null).concat([
+      { name:'i', type:'int', addr: I_ADDR, val: 2, highlight: true }
+    ]),
+    vars: { i: 2 },
+    output: null,
+  },
+  {
+    line: 'pr', type: 'exec',
+    explain: '<b>printf</b> — <code>i=2</code>, <code>score[2]=85</code> 출력.',
+    mem: null,
+    vars: {},
+    output: '85  ',
+  },
+  {
+    line: 'forh', type: 'exec',
+    explain: '<b>i++</b> → <code>i=3</code>, 조건 참. 주의: <code>score[3]</code>은 <b style="color:#f85149">쓰레기 값</b>!',
+    mem: makeScore([78, 97, 85,'???', 91], null).concat([
+      { name:'i', type:'int', addr: I_ADDR, val: 3, highlight: true }
+    ]),
+    vars: { i: 3 },
+    output: null,
+  },
+  {
+    line: 'pr', type: 'exec',
+    explain: '<b>printf</b> — <code>i=3</code>, <code>score[3]=???</code> → 시뮬: <b style="color:#f85149">32679</b> (미정의 동작).',
+    mem: null,
+    vars: {},
+    output: '32679  ',
+  },
+  {
+    line: 'forh', type: 'exec',
+    explain: '<b>i++</b> → <code>i=4</code>, 조건 참.',
+    mem: makeScore([78, 97, 85,'???', 91], null).concat([
+      { name:'i', type:'int', addr: I_ADDR, val: 4, highlight: true }
+    ]),
+    vars: { i: 4 },
+    output: null,
+  },
+  {
+    line: 'pr', type: 'exec',
+    explain: '<b>printf</b> — <code>i=4</code>, <code>score[4]=91</code> 출력.',
+    mem: null,
+    vars: {},
+    output: '91  ',
+  },
+  {
+    line: 'forh', type: 'exec',
+    explain: '<b>i++</b> → <code>i=5</code>, 조건 <code>i &lt; 5</code> → <b>거짓</b>. 루프 종료.',
+    mem: makeScore([78, 97, 85,'???', 91], null).concat([
+      { name:'i', type:'int', addr: I_ADDR, val: 5, highlight: true }
+    ]),
+    vars: { i: 5 },
+    output: null,
+  },
+  {
+    line: 'nl', type: 'exec',
+    explain: '<b>printf("\\n")</b> — 줄 바꿈 출력.',
+    mem: null,
+    vars: {},
+    output: '',
+  },
+  {
+    line: 'ret', type: 'exec',
+    explain: '<b>return 0</b> — main() 함수 종료, 스택 프레임이 해제됩니다.',
+    mem: 'released',
+    vars: {},
+    output: null,
+  },
+];
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let stepIndex = 0;
+let varState  = {};   // { name: { val, changed } }
+let outputLines = [];
+let currentMem = null;
+let runTimer = null;
+
+// ══════════════════════════════════════════════════════
+//  RENDER CODE
+// ══════════════════════════════════════════════════════
+function renderCode(activeId) {
+  const area = document.getElementById('codeArea');
+  area.innerHTML = '';
+  CODE_LINES.forEach((line, idx) => {
+    const div = document.createElement('div');
+    div.className = 'code-line';
+    if (line.id && line.id === activeId) div.classList.add('hl-exec');
+    div.innerHTML = `
+      <div class="line-gutter">
+        <span class="line-num">${idx + 1}</span>
+        <div class="exec-arrow">${(line.id && line.id === activeId) ? '▶' : ' '}</div>
+      </div>
+      <div class="line-code">${line.text}</div>`;
+    area.appendChild(div);
+    if (line.id && line.id === activeId) {
+      setTimeout(() => div.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER MEMORY MAP
+// ══════════════════════════════════════════════════════
+function renderMem(memData) {
+  const container = document.getElementById('memCells');
+  if (memData === 'released') {
+    container.innerHTML = `<div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">
+      — main 프레임 해제됨 —</div>`;
+    return;
+  }
+  if (!memData || memData.length === 0) return; // keep previous
+
+  container.innerHTML = '';
+  // separate score array and i
+  const scoreItems = memData.filter(m => m.name.startsWith('score'));
+  const iItem      = memData.find(m => m.name === 'i');
+
+  // score cells
+  scoreItems.forEach((item, idx) => {
+    const cell = document.createElement('div');
+    cell.className = 'mem-cell allocated';
+    if (item.highlight) cell.classList.add('changed');
+    if (item.val === '???') cell.classList.add('garbage');
+    cell.style.animationDelay = (idx * 40) + 'ms';
+    cell.innerHTML = `
+      <span class="mem-addr">${item.addr}</span>
+      <span class="mem-name">${item.name}</span>
+      <span class="mem-val">${item.val}</span>`;
+    container.appendChild(cell);
+  });
+
+  // divider + i variable
+  if (iItem) {
+    const div = document.createElement('div');
+    div.className = 'mem-divider';
+    container.appendChild(div);
+    const cell = document.createElement('div');
+    cell.className = 'mem-cell allocated' + (iItem.highlight ? ' changed' : '');
+    cell.innerHTML = `
+      <span class="mem-addr">${iItem.addr}</span>
+      <span class="mem-name">${iItem.name}</span>
+      <span class="mem-val">${iItem.val}</span>`;
+    container.appendChild(cell);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER VAR TABLE
+// ══════════════════════════════════════════════════════
+const VAR_ADDRS = {
+  'score[0]': scoreAddr(0),
+  'score[1]': scoreAddr(1),
+  'score[2]': scoreAddr(2),
+  'score[3]': scoreAddr(3),
+  'score[4]': scoreAddr(4),
+  'i': I_ADDR,
+};
+const VAR_TYPES = {
+  'score[0]':'int','score[1]':'int','score[2]':'int',
+  'score[3]':'int','score[4]':'int','i':'int',
+};
+const VAR_ORDER = ['score[0]','score[1]','score[2]','score[3]','score[4]','i'];
+
+function renderVarTable(newVars) {
+  // update changed flags
+  if (newVars) {
+    for (const k in newVars) {
+      const old = varState[k];
+      varState[k] = { val: newVars[k], changed: (old === undefined || old.val !== newVars[k]) };
+    }
+    // clear changed flag for others
+    for (const k in varState) {
+      if (!(k in newVars)) varState[k] = { ...varState[k], changed: false };
+    }
+  }
+
+  const tbody = document.getElementById('varTableBody');
+  const keys = VAR_ORDER.filter(k => k in varState);
+  if (keys.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">— 아직 변수 없음 —</td></tr>';
+    return;
+  }
+  tbody.innerHTML = keys.map(k => {
+    const v = varState[k];
+    const isGarbage = v.val === '???';
+    return `<tr class="${v.changed ? 'changed-row' : ''}">
+      <td class="td-name">${k}</td>
+      <td class="td-type">${VAR_TYPES[k]}</td>
+      <td class="td-addr">${VAR_ADDRS[k]}</td>
+      <td class="td-val${isGarbage ? ' garbage' : ''}">${v.val}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER OUTPUT
+// ══════════════════════════════════════════════════════
+function renderOutput() {
+  const area = document.getElementById('outputArea');
+  if (outputLines.length === 0) {
+    area.innerHTML = '<span class="output-dim">// 실행 결과가 여기 표시됩니다</span>';
+    return;
+  }
+  area.innerHTML = outputLines.map((l, i) => {
+    const isCur = i === outputLines.length - 1;
+    const txt = escHtml(l);
+    return `<span class="output-line">${isCur ? '<span class="output-cur">▶ </span>' : '  '}${txt}</span>`;
+  }).join('\n');
+  area.scrollTop = area.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER STEP INFO
+// ══════════════════════════════════════════════════════
+function renderStepInfo() {
+  document.getElementById('stepNum').textContent   = stepIndex;
+  document.getElementById('stepTotal').textContent = STEPS.length;
+  const pct = stepIndex === 0 ? 0 : Math.round((stepIndex / STEPS.length) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('btnPrev').disabled = stepIndex === 0;
+  document.getElementById('btnStep').disabled = stepIndex >= STEPS.length;
+}
+
+// ══════════════════════════════════════════════════════
+//  APPLY STEP
+// ══════════════════════════════════════════════════════
+function syncMemCellsFromVarState() {
+  if (!Array.isArray(currentMem)) return;
+  for (let i = 0; i < currentMem.length; i++) {
+    const c = currentMem[i];
+    if (!c || c.ellipsis) continue;
+    const k = c.name;
+    if (varState[k] !== undefined) c.val = varState[k].val;
+  }
+}
+
+function applyStep(idx) {
+  const s = STEPS[idx];
+  renderCode(s.line);
+  document.getElementById('explainBox').innerHTML = s.explain;
+
+  if (s.mem !== null) {
+    currentMem = s.mem;
+  }
+  renderVarTable(s.vars || {});
+
+  if (s.mem !== null) {
+    renderMem(s.mem);
+  } else {
+    syncMemCellsFromVarState();
+    if (currentMem) renderMem(currentMem);
+  }
+
+  if (s.output !== null) {
+    outputLines.push(s.output);
+    renderOutput();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════════
+function stepForward() {
+  if (stepIndex >= STEPS.length) return;
+  applyStep(stepIndex);
+  stepIndex++;
+  renderStepInfo();
+}
+
+function stepBack() {
+  if (stepIndex <= 0) return;
+  // replay from scratch
+  stepIndex--;
+  rebuildState(stepIndex);
+  renderStepInfo();
+}
+
+function rebuildState(targetIdx) {
+  // reset
+  varState     = {};
+  outputLines  = [];
+  currentMem   = null;
+  renderVarTable({});
+  renderOutput();
+  renderCode(null);
+
+  for (let i = 0; i < targetIdx; i++) {
+    const s = STEPS[i];
+    if (s.vars) {
+      for (const k in s.vars) {
+        varState[k] = { val: s.vars[k], changed: false };
+      }
+    }
+    if (s.mem !== null) currentMem = s.mem;
+    if (s.output !== null) outputLines.push(s.output);
+  }
+
+  if (targetIdx > 0) {
+    const s = STEPS[targetIdx - 1];
+    renderCode(s.line);
+    document.getElementById('explainBox').innerHTML = s.explain;
+    syncMemCellsFromVarState();
+    if (currentMem) renderMem(currentMem);
+    renderVarTable(null);
+    renderOutput();
+  } else {
+    renderCode(null);
+    document.getElementById('explainBox').innerHTML =
+      '← Step 버튼을 눌러 실행을 시작하세요 &nbsp;&nbsp; <span style="color:var(--text3);font-size:11px">키보드: ← → 방향키 | r 리셋</span>';
+    const container = document.getElementById('memCells');
+    container.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">— 아직 변수가 선언되지 않았습니다 —</div>';
+  }
+}
+
+function resetDebug() {
+  if (runTimer) { clearInterval(runTimer); runTimer = null; document.getElementById('btnRun').textContent = '▷ Run All'; }
+  stepIndex = 0;
+  rebuildState(0);
+  renderStepInfo();
+}
+
+function runAll() {
+  if (runTimer) {
+    clearInterval(runTimer);
+    runTimer = null;
+    document.getElementById('btnRun').textContent = '▷ Run All';
+    return;
+  }
+  document.getElementById('btnRun').textContent = '⏸ Pause';
+  runTimer = setInterval(() => {
+    if (stepIndex >= STEPS.length) {
+      clearInterval(runTimer);
+      runTimer = null;
+      document.getElementById('btnRun').textContent = '▷ Run All';
+      return;
+    }
+    stepForward();
+  }, 700);
+}
+
+// ══════════════════════════════════════════════════════
+//  KEYBOARD
+// ══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'n') stepForward();
+  else if (e.key === 'ArrowLeft' || e.key === 'p') stepBack();
+  else if (e.key === 'r' || e.key === 'R') resetDebug();
+});
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+renderCode(null);
+renderVarTable({});
+renderOutput();
+renderStepInfo();
+</script>
+</body>
+</html>

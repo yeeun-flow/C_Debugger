@@ -508,6 +508,7 @@ function _memVizEqual(a, b) {
 }
 
 function stepForward() {
+  if (!state.currentTopic || typeof TOPICS === 'undefined' || !TOPICS[state.currentTopic]) return;
   const t = TOPICS[state.currentTopic];
   if (state.stepIndex >= t.steps.length) return;
   const step = t.steps[state.stepIndex];
@@ -518,6 +519,7 @@ function stepForward() {
 
 function stepBack() {
   if (state.stepIndex <= 0) return;
+  if (!state.currentTopic || typeof TOPICS === 'undefined' || !TOPICS[state.currentTopic]) return;
   state.stepIndex--;
 
   state.outputLines = [];
@@ -542,6 +544,7 @@ function stepBack() {
 }
 
 function runAll() {
+  if (!state.currentTopic || typeof TOPICS === 'undefined' || !TOPICS[state.currentTopic]) return;
   const t = TOPICS[state.currentTopic];
   let lastMemViz = null;
   while (state.stepIndex < t.steps.length) {
@@ -565,6 +568,11 @@ function runAll() {
 }
 
 function resetDebug() {
+  const cfg = CHAPTER_CONFIG[state.currentChapter];
+  if (cfg && cfg.vizLinks) {
+    showVizLinksPlaceholder();
+    return;
+  }
   state.stepIndex = 0;
   state.varState = {};
   state.lastMemViz = null;
@@ -671,7 +679,23 @@ const CHAPTER_CONFIG = {
     sidebarHeader: '7장 — 반복문 (while / do-while / for)',
     defaultTopic: 'whilebasic',
   },
+  ch08: {
+    vizLinks: true,
+    sidebarHeader: '8장 — 배열 시각화 (별도 HTML)',
+  },
 };
+
+/** GitHub Pages·로컬 공통: 저장소 루트 기준 상대 경로 */
+const CH08_VIZ_LINKS = [
+  { href: 'src/chapter08/01decarray_viz.html', label: '01decarray.c', sub: '선언·for·printf', icon: '📦' },
+  { href: 'src/chapter08/02initarray_viz.html', label: '02initarray.c', sub: '초기화·합·평균', icon: '📦' },
+  { href: 'src/chapter08/03tdarray_viz.html', label: '03tdarray.c', sub: '2차원·행 우선', icon: '📦' },
+  { href: 'src/chapter08/04inittdary_viz.html', label: '04inittdary.c', sub: '초기화 리스트', icon: '📦' },
+  { href: 'src/chapter08/05tdscore_viz.html', label: '05tdscore.c', sub: '성적표·합·평균', icon: '📦' },
+  { href: 'src/chapter08/06thdary_viz.html', label: '06thdary.c', sub: '3차원 배열', icon: '📦' },
+  { href: 'src/chapter08/07arysize_viz.html', label: '07arysize.c', sub: 'sizeof', icon: '📦' },
+  { href: 'src/chapter08/lab1inputarray_viz.html', label: 'lab1inputarray.c', sub: '실습 — 0으로 종료', icon: '🔧' },
+];
 
 function loadChapterTopics(src, callback) {
   const old = document.getElementById('chapter-topics-script');
@@ -681,6 +705,62 @@ function loadChapterTopics(src, callback) {
   script.src = src;
   script.onload = callback;
   document.body.appendChild(script);
+}
+
+function renderSidebarVizLinks() {
+  const container = $(IDS.sidebarScroll);
+  if (!container) return;
+  let html = '<div class="sidebar-group"><div class="sidebar-group-label">메모리 시각화</div>';
+  CH08_VIZ_LINKS.forEach(item => {
+    html += `<a class="sidebar-item" href="${escHtml(item.href)}">
+        <span class="sidebar-item-icon">${item.icon}</span>
+        <div class="sidebar-item-info">
+          <div class="sidebar-item-name">${escHtml(item.label)}</div>
+          <div class="sidebar-item-sub">${escHtml(item.sub)}</div>
+        </div>
+        <div class="sidebar-item-dot"></div>
+      </a>`;
+  });
+  html += '</div>';
+  html += '<div class="sidebar-group"><div class="sidebar-group-label">통합 8장 엔진</div>';
+  html += `<a class="sidebar-item" href="${escHtml('src/chapter08/index.html')}">
+      <span class="sidebar-item-icon">◎</span>
+      <div class="sidebar-item-info">
+        <div class="sidebar-item-name">chapter08/index.html</div>
+        <div class="sidebar-item-sub">topics.js + debugger.js (6·7장과 동일 UI)</div>
+      </div>
+      <div class="sidebar-item-dot"></div>
+    </a>`;
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function showVizLinksPlaceholder() {
+  state.currentTopic = null;
+  state.stepIndex = 0;
+  state.varState = {};
+  state.lastMemViz = null;
+  clearOutput();
+  $(IDS.editorTitle).textContent = '8장 — 단계별 시각화';
+  $(IDS.tabCodeName).textContent = 'CH08 viz';
+  $(IDS.topTitle).textContent = '8장 배열';
+  $(IDS.topBadge).textContent = '별도 HTML';
+  $(IDS.codeArea).innerHTML =
+    '<div style="padding:22px;color:var(--text2);font-size:13px;line-height:1.75;max-width:560px;font-family:system-ui,sans-serif">' +
+    '<p style="margin:0 0 12px;color:var(--text)"><strong>8장</strong>은 예제마다 독립된 시각화 페이지(<code style="font-size:11px">*_viz.html</code>)로 열립니다.</p>' +
+    '<p style="margin:0">좌측 사이드바 링크를 누르면 해당 HTML로 이동합니다. GitHub Pages에서도 저장소 루트 기준 상대 경로(<code style="font-size:11px">src/chapter08/…</code>)로 동작합니다.</p>' +
+    '</div>';
+  $(IDS.explainBox).innerHTML = '← 사이드바에서 열고 싶은 예제를 선택하세요.';
+  $(IDS.condBadge).innerHTML = '';
+  const mt = $(IDS.memTable);
+  if (mt) mt.innerHTML = '';
+  renderStackViz(null);
+  $(IDS.btnPrev).disabled = true;
+  $(IDS.btnStep).disabled = true;
+  $(IDS.stepNum).textContent = '0';
+  $(IDS.stepTotal).textContent = '—';
+  $(IDS.conceptBody).innerHTML =
+    '<p style="margin:0;line-height:1.65">통합 디버거(이 화면)는 6·7장처럼 <code>topics.js</code> 한 곳에서 스텝을 밟습니다. 8장 예제 중 일부는 메모리 맵을 크게 보여 주기 위해 <strong>전용 HTML</strong>로 분리되어 있습니다.</p>';
 }
 
 function selectChapter(chapterKey) {
@@ -694,6 +774,14 @@ function selectChapter(chapterKey) {
 
   const sidebarHeader = $(IDS.sidebarHeader);
   if (sidebarHeader) sidebarHeader.textContent = config.sidebarHeader;
+
+  if (config.vizLinks) {
+    const old = document.getElementById('chapter-topics-script');
+    if (old) old.remove();
+    renderSidebarVizLinks();
+    showVizLinksPlaceholder();
+    return;
+  }
 
   loadChapterTopics(config.topicsPath, () => {
     renderSidebar();

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05tdscore.c — 2차원 성적표 합·평균</title>
+<style>
+  :root{--bg0:#0d1117;--bg1:#161b22;--bg2:#1c2128;--bg3:#21262d;--bg4:#30363d;--text1:#e6edf3;--text2:#8b949e;--text3:#484f58;--accent-b:#388bfd;--accent-g:#3fb950;--accent-y:#d29922;--accent-r:#f85149;--accent-p:#bc8cff;--hl-exec:rgba(56,139,253,.15);--changed:rgba(61,185,80,.18);--highlight-mem:rgba(210,153,34,.22);--font-mono:'JetBrains Mono','Fira Code',Consolas,monospace;--font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0;}html,body{height:100%;background:var(--bg0);color:var(--text1);font-family:var(--font-sans);}
+  .topbar{display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--bg1);border-bottom:1px solid var(--bg4);position:sticky;top:0;z-index:10;}
+  .topbar .badge{background:var(--accent-b);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;}
+  .topbar .title{font-size:14px;font-weight:600;}.topbar .subtitle{font-size:12px;color:var(--text2);}
+  .main{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 49px);}
+  .left-panel{display:flex;flex-direction:column;border-right:1px solid var(--bg4);overflow:hidden;}
+  .panel-head{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg1);border-bottom:1px solid var(--bg4);font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;flex-shrink:0;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}.dot-blue{background:var(--accent-b);}.dot-green{background:var(--accent-g);}.dot-yellow{background:var(--accent-y);}.dot-purple{background:var(--accent-p);}
+  .code-area{flex:1;overflow-y:auto;padding:12px 0;font-family:var(--font-mono);font-size:13px;line-height:1.7;}
+  .code-line{display:flex;align-items:center;padding:1px 0;border-left:3px solid transparent;transition:background .15s,border-color .15s;}
+  .code-line.hl-exec{background:var(--hl-exec);border-left-color:var(--accent-b);}
+  .line-gutter{display:flex;align-items:center;justify-content:flex-end;width:52px;padding-right:8px;flex-shrink:0;color:var(--text3);font-size:12px;gap:4px;}
+  .line-num{min-width:20px;text-align:right;}.exec-arrow{width:12px;color:var(--accent-b);font-size:10px;}
+  .line-code{padding-left:6px;white-space:pre;color:var(--text1);}
+  .kw{color:#ff7b72;}.ty{color:#79c0ff;}.fn-c{color:#d2a8ff;}.nm{color:#79c0ff;}.st{color:#a5d6ff;}.pp{color:#ff7b72;}.vr{color:#ffa657;}.cm{color:var(--text3);font-style:italic;}.co{color:var(--text3);font-style:italic;}
+  .controls{padding:12px 14px;border-top:1px solid var(--bg4);background:var(--bg1);flex-shrink:0;}
+  .ctrl-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .btn{padding:6px 16px;border-radius:6px;border:1px solid var(--bg4);font-size:12px;font-weight:600;cursor:pointer;background:var(--bg3);color:var(--text1);font-family:var(--font-mono);}
+  .btn:hover{background:var(--bg4);}.btn:disabled{opacity:.35;cursor:not-allowed;}
+  .btn-primary{background:var(--accent-b);color:#fff;border-color:var(--accent-b);}.btn-primary:hover{background:#1a7fe0;}
+  .step-info{font-size:12px;color:var(--text2);}.step-num{color:var(--accent-b);font-weight:700;}
+  .progress-bar{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:10px;}
+  .progress-fill{height:100%;background:var(--accent-b);border-radius:2px;transition:width .3s ease;}
+  .explain-box{background:var(--bg2);border:1px solid var(--bg4);border-radius:6px;padding:8px 12px;font-size:12px;line-height:1.6;color:var(--text2);min-height:38px;}
+  .explain-box b{color:var(--text1);}.explain-box code{color:var(--accent-y);font-family:var(--font-mono);font-size:11px;}
+  .right-panel{display:flex;flex-direction:column;overflow:hidden;}.right-scroll{flex:1;overflow-y:auto;}
+  .mem-section{padding:14px;border-bottom:1px solid var(--bg4);}
+  .section-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;}
+  .stack-frame{border:1px solid var(--bg4);border-radius:6px;overflow:hidden;}
+  .frame-header{background:var(--bg3);padding:5px 10px;font-size:11px;font-weight:600;color:var(--text2);display:flex;justify-content:space-between;}
+  .frame-fn{color:var(--accent-p);}.frame-ret{font-size:10px;color:var(--text3);font-family:var(--font-mono);}
+  .mem-cells{display:flex;flex-direction:column;}
+  .mem-cell{display:grid;grid-template-columns:110px 1fr 1fr;align-items:center;padding:5px 10px;border-top:1px solid var(--bg4);font-family:var(--font-mono);font-size:12px;border-left:3px solid transparent;}
+  .mem-cell.allocated{animation:cellIn .25s ease forwards;}
+  .mem-cell.changed{background:var(--highlight-mem);border-left-color:var(--accent-y);}
+  .mem-cell .mem-addr{color:var(--text3);font-size:11px;}.mem-cell .mem-name{color:var(--accent-y);}.mem-cell .mem-val{color:var(--accent-g);font-weight:600;text-align:right;}
+  .mem-row-label{padding:4px 10px;background:var(--bg3);font-size:10px;color:var(--text3);font-family:var(--font-mono);}
+  .mem-divider{height:1px;background:var(--bg3);}
+  @keyframes cellIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+  .var-section{padding:14px;border-bottom:1px solid var(--bg4);}
+  .var-table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;}
+  .var-table th{text-align:left;padding:4px 8px;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--bg4);}
+  .var-table td{padding:5px 8px;border-bottom:1px solid var(--bg3);}
+  .var-table tr.changed-row td{background:var(--changed);}
+  .var-table tr.changed-row td:first-child{border-left:3px solid var(--accent-g);}
+  .var-table tr td:first-child{border-left:3px solid transparent;}
+  .td-name{color:var(--accent-y);}.td-type{color:var(--accent-b);}.td-addr{color:var(--text3);font-size:11px;}.td-val{color:var(--accent-g);font-weight:600;}
+  .empty-row td{color:var(--text3);font-size:11px;padding:8px;}
+  .out-section{padding:14px;}
+  .output-area{background:var(--bg2);border:1px solid var(--bg4);border-radius:6px;padding:10px 12px;font-family:var(--font-mono);font-size:12px;line-height:1.8;min-height:60px;max-height:220px;overflow-y:auto;color:var(--accent-g);white-space:pre-wrap;}
+  .output-dim{color:var(--text3);font-size:11px;}
+  .concept-banner{margin:14px;padding:10px 14px;background:var(--bg2);border:1px solid var(--bg4);border-left:3px solid var(--accent-b);border-radius:6px;font-size:12px;line-height:1.65;color:var(--text2);}
+  .concept-banner b{color:var(--text1);}.concept-banner code{color:var(--accent-y);font-family:var(--font-mono);font-size:11px;}
+  ::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="badge">CH08</span>
+  <span class="title">05tdscore.c</span>
+  <span class="subtitle">— 2차원 성적표 · 합 · 평균</span>
+</div>
+<div class="main">
+  <div class="left-panel">
+    <div class="panel-head"><span class="dot dot-blue"></span> 소스 코드</div>
+    <div class="code-area" id="codeArea"></div>
+    <div class="controls">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="ctrl-row">
+        <button class="btn" id="btnPrev" onclick="stepBack()">◀ Prev</button>
+        <button class="btn btn-primary" id="btnStep" onclick="stepForward()">Step ▶</button>
+        <button class="btn" id="btnRun" onclick="runAll()">▷ Run All</button>
+        <button class="btn" onclick="resetDebug()">↺ Reset</button>
+        <span class="step-info">Step <span class="step-num" id="stepNum">0</span> / <span id="stepTotal">0</span></span>
+      </div>
+      <div class="explain-box" id="explainBox">← Step 버튼을 눌러 실행을 시작하세요 &nbsp;<span style="color:var(--text3);font-size:11px">키보드: ← → | r 리셋</span></div>
+    </div>
+  </div>
+  <div class="right-panel">
+    <div class="right-scroll">
+      <div class="concept-banner">
+        <b>score[i][j]</b>를 이중 for로 순회하며 <b>전체 합</b>과 <b>열(중간/기말) 합</b>을 누적합니다.<br>
+        메모리에는 <b>4행×2열</b>이 행 우선 연속 블록으로 적재됩니다.
+      </div>
+      <div class="mem-section">
+        <div class="section-title"><span class="dot dot-yellow" style="width:7px;height:7px;margin-right:5px;"></span>스택 메모리 맵</div>
+        <div class="stack-frame">
+          <div class="frame-header"><span><span class="frame-fn">main()</span> 스택 프레임</span><span class="frame-ret">ret: 0x400640</span></div>
+          <div class="mem-cells" id="memCells"><div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">— 아직 변수가 선언되지 않았습니다 —</div></div>
+        </div>
+      </div>
+      <div class="var-section">
+        <div class="section-title"><span class="dot dot-green" style="width:7px;height:7px;margin-right:5px;"></span>변수 상태</div>
+        <table class="var-table"><thead><tr><th>변수명</th><th>타입</th><th>주소</th><th>값</th></tr></thead><tbody id="varTableBody"><tr class="empty-row"><td colspan="4">— 아직 변수 없음 —</td></tr></tbody></table>
+      </div>
+      <div class="out-section">
+        <div class="section-title"><span class="dot dot-purple" style="width:7px;height:7px;margin-right:5px;"></span>출력 결과</div>
+        <div class="output-area" id="outputArea"><span class="output-dim">// 실행 결과가 여기 표시됩니다</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const CODE_LINES=[
+  {text:`<span class="pp">#include</span> <span class="st">&lt;stdio.h&gt;</span>`},
+  {text:`<span class="pp">#define</span> ROWSIZE <span class="nm">4</span>`},
+  {text:`<span class="pp">#define</span> COLSIZE <span class="nm">2</span>`},
+  {text:``},
+  {text:`<span class="ty">int</span> <span class="fn-c">main</span>(<span class="ty">void</span>) {`},
+  {id:'decl',text:`    <span class="ty">int</span> <span class="vr">sum</span> = <span class="nm">0</span>, <span class="vr">midsum</span> = <span class="nm">0</span>, <span class="vr">finalsum</span> = <span class="nm">0</span>;`},
+  {text:``},
+  {text:`    <span class="cm">// 2차원 배열 초기화</span>`},
+  {id:'init',text:`    <span class="ty">int</span> <span class="vr">score</span>[][COLSIZE] = { <span class="nm">95</span>, <span class="nm">85</span>, <span class="nm">90</span>, <span class="nm">88</span>, <span class="nm">86</span>, <span class="nm">90</span>, <span class="nm">88</span>, <span class="nm">78</span> };`},
+  {id:'h1',  text:`    <span class="fn-c">printf</span>(<span class="st">"       중간       기말\\n"</span>);`},
+  {id:'h2',  text:`    <span class="fn-c">printf</span>(<span class="st">"    --------------------\\n"</span>);`},
+  {id:'fori',text:`    <span class="kw">for</span> (<span class="ty">int</span> <span class="vr">i</span> = <span class="nm">0</span>; <span class="vr">i</span> &lt; ROWSIZE; <span class="vr">i</span>++)`},
+  {text:`    {`},
+  {text:`        <span class="kw">for</span> (<span class="ty">int</span> <span class="vr">j</span> = <span class="nm">0</span>; <span class="vr">j</span> &lt; COLSIZE; <span class="vr">j</span>++)`},
+  {text:`        {`},
+  {text:`            <span class="fn-c">printf</span>(<span class="st">"%10d "</span>, <span class="vr">score</span>[<span class="vr">i</span>][<span class="vr">j</span>]);`},
+  {text:`            <span class="vr">sum</span> += <span class="vr">score</span>[<span class="vr">i</span>][<span class="vr">j</span>];`},
+  {text:`            <span class="kw">if</span> (<span class="vr">j</span> == <span class="nm">0</span>)`},
+  {text:`                <span class="vr">midsum</span> += <span class="vr">score</span>[<span class="vr">i</span>][<span class="vr">j</span>];`},
+  {text:`            <span class="kw">else</span>`},
+  {text:`                <span class="vr">finalsum</span> += <span class="vr">score</span>[<span class="vr">i</span>][<span class="vr">j</span>];`},
+  {text:`        }`},
+  {text:`        <span class="fn-c">puts</span>(<span class="st">""</span>);`},
+  {text:`    }`},
+  {text:``},
+  {id:'f1',  text:`    <span class="fn-c">printf</span>(<span class="st">"    --------------------\\n"</span>);`},
+  {id:'f2',  text:`    <span class="fn-c">printf</span>(<span class="st">"평균: %6.2f %10.2f\\n"</span>, (<span class="ty">double</span>)<span class="vr">midsum</span>/ROWSIZE, (<span class="ty">double</span>)<span class="vr">finalsum</span>/ROWSIZE);`},
+  {id:'f3',  text:`    <span class="fn-c">printf</span>(<span class="st">"\\n성적의 합은 %d이고 "</span>, <span class="vr">sum</span>);`},
+  {id:'f4',  text:`    <span class="fn-c">printf</span>(<span class="st">"평균은 %.2f이다.\\n"</span>, (<span class="ty">double</span>)<span class="vr">sum</span>/(ROWSIZE*COLSIZE));`},
+  {id:'ret', text:`    <span class="kw">return</span> <span class="nm">0</span>;`},
+  {text:`}`},
+];
+
+const B=0x7fff5200;
+function sa(i,j){return '0x'+(B+(i*2+j)*4).toString(16);}
+const SCORE_DATA=[[95,85],[90,88],[86,90],[88,78]];
+function scoreMem(){
+  const out=[];
+  for(let i=0;i<4;i++)for(let j=0;j<2;j++)
+    out.push({name:`score[${i}][${j}]`,type:'int',addr:sa(i,j),val:SCORE_DATA[i][j],highlight:false,row:i});
+  return out;
+}
+const SUM_ADDR='0x7fff5220',MID_ADDR='0x7fff5224',FIN_ADDR='0x7fff5228';
+
+const STEPS=[
+  {line:'decl',explain:`<b>sum=0, midsum=0, finalsum=0</b> — 누적 변수 초기화.`,
+   mem:[{name:'sum',type:'int',addr:SUM_ADDR,val:0,highlight:true},{name:'midsum',type:'int',addr:MID_ADDR,val:0,highlight:false},{name:'finalsum',type:'int',addr:FIN_ADDR,val:0,highlight:false}],
+   vars:{sum:0,midsum:0,finalsum:0},output:null},
+  {line:'init',explain:`<b>score[4][2]</b> — 4×2×4 = 32 바이트가 행 우선으로 연속 적재됩니다.`,
+   mem:scoreMem().concat([{name:'sum',type:'int',addr:SUM_ADDR,val:0,highlight:false},{name:'midsum',type:'int',addr:MID_ADDR,val:0,highlight:false},{name:'finalsum',type:'int',addr:FIN_ADDR,val:0,highlight:false}]),
+   vars:{'score[0][0]':95,'score[0][1]':85,'score[1][0]':90,'score[1][1]':88,'score[2][0]':86,'score[2][1]':90,'score[3][0]':88,'score[3][1]':78},output:null},
+  {line:'h1',explain:`헤더 출력`,mem:null,vars:{},output:'       중간       기말'},
+  {line:'h2',explain:`구분선`,mem:null,vars:{},output:'    --------------------'},
+  {line:'fori',explain:`이중 for 루프 — 4행×2열을 순회하며 출력 및 합산 (시뮬레이션 압축).`,
+   mem:null,vars:{sum:700,midsum:359,finalsum:341},output:'        95         85 '},
+  {line:'fori',explain:`행 1 출력`,mem:null,vars:{},output:'        90         88 '},
+  {line:'fori',explain:`행 2 출력`,mem:null,vars:{},output:'        86         90 '},
+  {line:'fori',explain:`행 3 출력`,mem:null,vars:{},output:'        88         78 '},
+  {line:'f1',explain:`구분선`,mem:null,vars:{},output:'    --------------------'},
+  {line:'f2',explain:`열 평균 출력 — midsum/4 = 89.75, finalsum/4 = 85.25`,mem:null,vars:{},output:'평균:  89.75      85.25\n'},
+  {line:'f3',explain:`전체 합 출력`,mem:null,vars:{},output:'\n성적의 합은 700이고 '},
+  {line:'f4',explain:`전체 평균 — 700 / 8 = 87.50`,mem:null,vars:{},output:'평균은 87.50이다.'},
+  {line:'ret',explain:`<b>return 0</b> — 프레임 해제.`,mem:'released',vars:{},output:null},
+];
+
+const VAR_ORDER=['score[0][0]','score[0][1]','score[1][0]','score[1][1]','score[2][0]','score[2][1]','score[3][0]','score[3][1]','sum','midsum','finalsum'];
+const VAR_TYPES=Object.fromEntries(VAR_ORDER.map(k=>[k,'int']));
+const VAR_ADDRS={...Object.fromEntries([[0,0],[0,1],[1,0],[1,1],[2,0],[2,1],[3,0],[3,1]].map(([i,j])=>[`score[${i}][${j}]`,sa(i,j)])),'sum':SUM_ADDR,'midsum':MID_ADDR,'finalsum':FIN_ADDR};
+
+let stepIndex=0,varState={},outputLines=[],currentMem=null,runTimer=null;
+
+function renderCode(activeId){
+  const area=document.getElementById('codeArea');area.innerHTML='';
+  CODE_LINES.forEach((line,idx)=>{
+    const div=document.createElement('div');div.className='code-line';
+    if(line.id&&line.id===activeId){div.classList.add('hl-exec');setTimeout(()=>div.scrollIntoView({block:'center',behavior:'smooth'}),50);}
+    div.innerHTML=`<div class="line-gutter"><span class="line-num">${idx+1}</span><div class="exec-arrow">${line.id&&line.id===activeId?'▶':' '}</div></div><div class="line-code">${line.text}</div>`;
+    area.appendChild(div);
+  });
+}
+function renderMem(memData){
+  const c=document.getElementById('memCells');
+  if(memData==='released'){c.innerHTML=`<div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">— main 프레임 해제됨 —</div>`;return;}
+  if(!memData||!memData.length)return;
+  c.innerHTML='';
+  const scoreCells=memData.filter(m=>m.name.startsWith('score'));
+  const scalars=memData.filter(m=>!m.name.startsWith('score'));
+  // group score by row
+  const rows={};
+  scoreCells.forEach(m=>{const r=m.row!=null?m.row:0;if(!rows[r])rows[r]=[];rows[r].push(m);});
+  Object.entries(rows).forEach(([r,items])=>{
+    const lbl=document.createElement('div');lbl.className='mem-row-label';lbl.textContent=`행 ${r} — 중간: ${items[0]?.val}  기말: ${items[1]?.val}`;c.appendChild(lbl);
+    items.forEach((item,idx)=>{
+      const cell=document.createElement('div');cell.className='mem-cell allocated';
+      if(item.highlight)cell.classList.add('changed');
+      cell.style.animationDelay=(idx*30)+'ms';
+      cell.innerHTML=`<span class="mem-addr">${item.addr}</span><span class="mem-name">${item.name}</span><span class="mem-val">${item.val}</span>`;
+      c.appendChild(cell);
+    });
+  });
+  if(scalars.length){
+    const div=document.createElement('div');div.className='mem-divider';c.appendChild(div);
+    scalars.forEach((item,idx)=>{
+      const cell=document.createElement('div');cell.className='mem-cell allocated';
+      if(item.highlight)cell.classList.add('changed');
+      cell.style.animationDelay=(idx*30)+'ms';
+      cell.innerHTML=`<span class="mem-addr">${item.addr}</span><span class="mem-name">${item.name}</span><span class="mem-val">${item.val}</span>`;
+      c.appendChild(cell);
+    });
+  }
+}
+function renderVarTable(newVars){
+  if(newVars){for(const k in newVars){const old=varState[k];varState[k]={val:newVars[k],changed:(old===undefined||old.val!==newVars[k])};}for(const k in varState){if(!(k in newVars))varState[k]={...varState[k],changed:false};}}
+  const tbody=document.getElementById('varTableBody');
+  const keys=VAR_ORDER.filter(k=>k in varState);
+  if(!keys.length){tbody.innerHTML='<tr class="empty-row"><td colspan="4">— 아직 변수 없음 —</td></tr>';return;}
+  tbody.innerHTML=keys.map(k=>`<tr class="${varState[k].changed?'changed-row':''}"><td class="td-name">${k}</td><td class="td-type">${VAR_TYPES[k]}</td><td class="td-addr">${VAR_ADDRS[k]}</td><td class="td-val">${varState[k].val}</td></tr>`).join('');
+}
+function renderOutput(){
+  const area=document.getElementById('outputArea');
+  if(!outputLines.length){area.innerHTML='<span class="output-dim">// 실행 결과가 여기 표시됩니다</span>';return;}
+  area.innerHTML=outputLines.map((l,i)=>`<span style="display:block">${i===outputLines.length-1?`<span style="color:var(--accent-y)">▶ </span>`:' '}${escHtml(l)}</span>`).join('\n');
+  area.scrollTop=area.scrollHeight;
+}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderStepInfo(){
+  document.getElementById('stepNum').textContent=stepIndex;document.getElementById('stepTotal').textContent=STEPS.length;
+  document.getElementById('progressFill').style.width=(stepIndex===0?0:Math.round(stepIndex/STEPS.length*100))+'%';
+  document.getElementById('btnPrev').disabled=stepIndex===0;document.getElementById('btnStep').disabled=stepIndex>=STEPS.length;
+}
+function syncMemCellsFromVarState(){
+  if(!Array.isArray(currentMem))return;
+  for(let i=0;i<currentMem.length;i++){
+    const c=currentMem[i];
+    if(!c||c.ellipsis)continue;
+    const k=c.name;
+    if(varState[k]!==undefined)c.val=varState[k].val;
+  }
+}
+function applyStep(idx){
+  const s=STEPS[idx];renderCode(s.line);document.getElementById('explainBox').innerHTML=s.explain||'';
+  if(s.mem!==null){currentMem=s.mem;}
+  renderVarTable(s.vars||{});
+  if(s.mem!==null){renderMem(s.mem);}
+  else{syncMemCellsFromVarState();if(currentMem)renderMem(currentMem);}
+  if(s.output!==null){outputLines.push(s.output);renderOutput();}
+}
+function stepForward(){if(stepIndex>=STEPS.length)return;applyStep(stepIndex);stepIndex++;renderStepInfo();}
+function stepBack(){if(stepIndex<=0)return;stepIndex--;rebuildState(stepIndex);renderStepInfo();}
+function rebuildState(t){
+  varState={};outputLines=[];currentMem=null;renderVarTable({});renderOutput();renderCode(null);
+  for(let i=0;i<t;i++){const s=STEPS[i];if(s.vars)for(const k in s.vars)varState[k]={val:s.vars[k],changed:false};if(s.mem!==null)currentMem=s.mem;if(s.output!==null)outputLines.push(s.output);}
+  if(t>0){const s=STEPS[t-1];renderCode(s.line);document.getElementById('explainBox').innerHTML=s.explain||'';syncMemCellsFromVarState();if(currentMem)renderMem(currentMem);renderVarTable(null);renderOutput();}
+  else{renderCode(null);document.getElementById('explainBox').innerHTML='← Step 버튼을 눌러 실행을 시작하세요';document.getElementById('memCells').innerHTML='<div style="padding:12px;color:var(--text3);font-size:12px;text-align:center">— 아직 변수가 선언되지 않았습니다 —</div>';}
+}
+function resetDebug(){if(runTimer){clearInterval(runTimer);runTimer=null;document.getElementById('btnRun').textContent='▷ Run All';}stepIndex=0;rebuildState(0);renderStepInfo();}
+function runAll(){
+  if(runTimer){clearInterval(runTimer);runTimer=null;document.getElementById('btnRun').textContent='▷ Run All';return;}
+  document.getElementById('btnRun').textContent='⏸ Pause';
+  runTimer=setInterval(()=>{if(stepIndex>=STEPS.length){clearInterval(runTimer);runTimer=null;document.getElementById('btnRun').textContent='▷ Run All';return;}stepForward();},700);
+}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='n')stepForward();else if(e.key==='ArrowLeft'||e.key==='p')stepBack();else if(e.key==='r'||e.key==='R')resetDebug();});
+renderCode(null);renderVarTable({});renderOutput();renderStepInfo();
+</script>
+</body>
+</html>

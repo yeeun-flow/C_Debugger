@@ -118,6 +118,45 @@ body {
   border: 1px solid rgba(91,156,246,0.25);
 }
 
+/* 메모리 시각화 전용 HTML (GitHub Pages에서도 동일 파일명으로 링크) */
+.ch08-viz-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.ch08-viz-bar > span {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.3px;
+  margin-right: 4px;
+}
+.ch08-viz-bar a {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border2);
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ch08-viz-bar a:hover {
+  background: var(--panel2);
+  border-color: var(--accent);
+}
+.ch08-viz-bar a.ch08-viz-home {
+  margin-left: auto;
+  color: var(--text2);
+}
+.ch08-viz-bar a.ch08-viz-home:hover {
+  color: var(--accent);
+}
+
 /* theme toggle */
 .theme-toggle {
   display: flex;
