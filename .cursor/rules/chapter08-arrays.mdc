@@ -1,0 +1,31 @@
+---
+description: 8장 배열 topics.js — 메모리 적재·memViz·검증
+globs: src/chapter08/**/*.js
+alwaysApply: false
+---
+
+# 8장 배열 (chapter08)
+
+## 원본 C
+
+- `src/chapter08/*.c`가 시나리오의 근거다. `topics.js`의 `code`·`steps`는 이와 맞출 것.
+
+## 메모리 적재 (핵심)
+
+- **연속 주소**: 1차원은 `score[0]`, `score[1]` … 순으로 `varTypes` 키와 `memViz.stack[0].vars`가 같은 순서를 따른다.
+- **행 우선(row-major)**: 2차원은 `td[0][0]…td[0][COL-1]`, 다음 행 … 순으로 적재된다는 설명·시각화를 맞출 것.
+- **미초기화**: `???` 등으로 표시할 때 `valToHexBytes`가 `??` 바이트를 내는지 확인한다.
+- **return 0**: 마지막 스텝은 다른 장과 동일하게 `memViz: { stack: [], heap: [], totalBytes: 0, released: '…' }` 패턴을 유지한다.
+
+## 출력과 memViz
+
+- `step.output`이 있는 스텝은 `appendOutput`으로 **한 줄씩** 쌓인다. 여러 `printf`를 한 스텝에 넣지 말고, 누적 출력이 어색하면 스텝을 나눈다.
+- `memViz`가 있는 스텝에서 `vars`의 키가 `varTypes`와 불일치하면 변수 테이블·스택 뷰가 어긋난다.
+
+## 검증
+
+- `node scripts/verify-topics.cjs`로 모든 장의 `steps[].line`이 `code[].id`에 존재하는지 확인한다. 8장 추가·수정 후 반드시 실행한다.
+
+## 브랜딩
+
+- README·HTML·주석에 **「Made with Cursor」** 등 에디터/도구 홍보 문구를 넣지 않는다.

@@ -41,3 +41,7 @@ alwaysApply: false
 
 `index.html`의 `data-topic`과 `onclick="selectTopic('...')"`가 토픽 키와 매칭됨.
 새 토픽 추가 시 HTML에도 항목 추가 필요.
+
+## topics.js 검증
+
+- `node scripts/verify-topics.cjs` — 각 `steps[].line`이 `code`에 존재하는 `id`인지 확인. 장 추가 후 실행 권장.
