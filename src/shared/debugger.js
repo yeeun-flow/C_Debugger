@@ -43,12 +43,72 @@ const TYPE_META = {
   double: { bytes: 8,  display: 'double' },
 };
 
+function parseTypeSpec(typeSpec) {
+  // 지원 예:
+  // - "int", "double", "int*"
+  // - "int[5]", "double[6]"
+  // - "int[3][4]" (2차원 이상도 dims로 처리)
+  const raw = (typeSpec || '').trim();
+  const dims = [];
+  const dimRe = /\[(\d+)\]/g;
+  let m;
+  while ((m = dimRe.exec(raw)) !== null) dims.push(parseInt(m[1], 10));
+  const baseType = raw.replace(/\[\d+\]/g, '').trim() || 'int';
+
+  const isPtr = baseType.includes('*');
+  const isArray = dims.length > 0;
+  const elemType = isArray ? baseType : baseType;
+  const elemBytes = isArray ? getTypeBytes(baseType) : null;
+  const totalElems = isArray ? dims.reduce((a, n) => a * n, 1) : 1;
+  const totalBytes = isArray ? elemBytes * totalElems : null;
+
+  return {
+    raw,
+    baseType,
+    isPtr,
+    isArray,
+    dims,
+    elemType,
+    elemBytes,
+    totalElems,
+    totalBytes,
+  };
+}
+
 function getTypeBytes(type) {
   if (!type) return 4;
-  if (TYPE_META[type]) return TYPE_META[type].bytes;
+  const spec = parseTypeSpec(type);
+  if (spec.isArray) return spec.totalBytes;
+  if (TYPE_META[spec.baseType]) return TYPE_META[spec.baseType].bytes;
   // 포인터 타입 등은 8바이트로 통일
-  if (type.includes('*')) return 8;
+  if (spec.baseType.includes('*')) return 8;
   return 4;
+}
+
+function _parseHexAddr(addr) {
+  if (typeof addr !== 'string') return null;
+  const m = addr.trim().match(/^0x([0-9a-fA-F]+)$/);
+  if (!m) return null;
+  return parseInt(m[1], 16);
+}
+
+function _formatHexAddr(n) {
+  if (typeof n !== 'number' || !isFinite(n)) return '0x7fff????';
+  return '0x' + Math.trunc(n).toString(16);
+}
+
+function _arrayElemName(base, idxs) {
+  return base + idxs.map(i => `[${i}]`).join('');
+}
+
+function _linearIndexFromDims(idxs, dims) {
+  // row-major: [i][j] => i*dims[1] + j ...
+  let lin = 0;
+  for (let k = 0; k < dims.length; k++) {
+    const stride = dims.slice(k + 1).reduce((a, n) => a * n, 1);
+    lin += idxs[k] * stride;
+  }
+  return lin;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -124,7 +184,7 @@ function renderCode(topic, activeLineId, type) {
 function renderMemTable(topic, newVars) {
   const t = TOPICS[topic];
   const tbody = $(IDS.memTable);
-  const addrs = t.baseAddr || {};
+  const addrs = t._autoBaseAddr || t.baseAddr || {};
   const varTypes = t.varTypes || {};
 
   if (newVars) {
@@ -135,22 +195,87 @@ function renderMemTable(topic, newVars) {
   }
 
   let html = '';
-  const entries = Object.keys(state.varState);
-  if (entries.length === 0) {
+  const ordered = Object.keys(varTypes);
+  const hasAny = ordered.length > 0 || Object.keys(state.varState).length > 0;
+
+  if (!hasAny) {
     html = `<tr><td colspan="4" style="color:var(--text3);padding:8px 10px;font-size:11px">— 아직 변수 없음 —</td></tr>`;
   } else {
-    entries.forEach(k => {
+    const rows = [];
+
+    ordered.forEach(name => {
+      const spec = parseTypeSpec(varTypes[name] || 'int');
+      const baseAddrStr = addrs[name] || '0x7fff????';
+      const baseAddrNum = _parseHexAddr(baseAddrStr);
+
+      if (!spec.isArray) {
+        const v = state.varState[name];
+        const val = v ? v.val : '???';
+        const cls = v && v.changed ? 'mem-val-changed' : '';
+        rows.push({
+          cls,
+          addr: baseAddrStr,
+          name,
+          type: spec.baseType,
+          val,
+          _resetKey: name,
+        });
+        return;
+      }
+
+      const elemBytes = spec.elemBytes;
+      const dims = spec.dims;
+      const elemType = spec.baseType;
+
+      // 1D
+      if (dims.length === 1) {
+        for (let i = 0; i < dims[0]; i++) {
+          const key = _arrayElemName(name, [i]);
+          const v = state.varState[key];
+          const val = v ? v.val : '???';
+          const addr = baseAddrNum != null ? _formatHexAddr(baseAddrNum + i * elemBytes) : '0x7fff????';
+          const cls = v && v.changed ? 'mem-val-changed' : '';
+          rows.push({ cls, addr, name: key, type: elemType, val, _resetKey: key });
+        }
+        return;
+      }
+
+      // 2D+
+      if (dims.length >= 2) {
+        const r = dims[0];
+        const c = dims[1];
+        for (let i = 0; i < r; i++) {
+          for (let j = 0; j < c; j++) {
+            const idxs = [i, j];
+            const key = _arrayElemName(name, idxs);
+            const v = state.varState[key];
+            const val = v ? v.val : '???';
+            const lin = _linearIndexFromDims(idxs, dims);
+            const addr = baseAddrNum != null ? _formatHexAddr(baseAddrNum + lin * elemBytes) : '0x7fff????';
+            const cls = v && v.changed ? 'mem-val-changed' : '';
+            rows.push({ cls, addr, name: key, type: elemType, val, _resetKey: key });
+          }
+        }
+      }
+    });
+
+    // varTypes에 없는 임시 변수들도 마지막에 표시
+    const extras = Object.keys(state.varState).filter(k => !(k in varTypes));
+    extras.forEach(k => {
       const v = state.varState[k];
-      const addr = addrs[k] || '0x7fff????';
-      const type = varTypes[k] || 'int';
-      const cls = v.changed ? 'mem-val-changed' : '';
-      html += `<tr class="${cls}">
-        <td class="mem-addr-cell">${addr}</td>
-        <td class="mem-name-cell">${k}</td>
-        <td class="mem-type-cell">${type}</td>
-        <td class="mem-val-cell">${v.val}</td>
+      const cls = v && v.changed ? 'mem-val-changed' : '';
+      rows.push({ cls, addr: addrs[k] || '0x7fff????', name: k, type: varTypes[k] || 'int', val: v ? v.val : '???', _resetKey: k });
+    });
+
+    rows.forEach(r => {
+      html += `<tr class="${r.cls}">
+        <td class="mem-addr-cell">${escHtml(r.addr)}</td>
+        <td class="mem-name-cell">${escHtml(r.name)}</td>
+        <td class="mem-type-cell">${escHtml(r.type)}</td>
+        <td class="mem-val-cell">${escHtml(r.val)}</td>
       </tr>`;
-      v.changed = false;
+      const vv = state.varState[r._resetKey];
+      if (vv) vv.changed = false;
     });
   }
   tbody.innerHTML = html;
@@ -403,20 +528,46 @@ function buildMemVizFromVarState(topic, varState) {
   if (!t || !t.varTypes || !varState || Object.keys(varState).length === 0) return null;
   const addrs = (t._autoBaseAddr || t.baseAddr || {});
   const varNames = Object.keys(t.varTypes);
-  const vars = varNames
-    .filter(name => {
+  const vars = [];
+
+  varNames.forEach(name => {
+    const typeSpec = t.varTypes[name] || 'int';
+    const spec = parseTypeSpec(typeSpec);
+    const baseAddrStr = addrs[name] || '0x7fff????';
+    const baseAddrNum = _parseHexAddr(baseAddrStr);
+
+    if (!spec.isArray) {
       const v = varState[name];
       const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
-      return v !== undefined && val !== '—';  // '—'는 "해당 없음" 표시 → 메모리 맵 제외
-    })
-    .map(name => {
-      const v = varState[name];
-      const val = (v && typeof v === 'object' && 'val' in v) ? v.val : v;
-      const type = t.varTypes[name] || 'int';
+      if (v === undefined || val === '—') return;
+      const type = spec.baseType;
       const bytes = getTypeBytes(type);
-      const addr = addrs[name] || '0x7fff????';
-      return { name, type, bytes, val, addr, highlight: false };
-    });
+      vars.push({ name, type, bytes, val, addr: baseAddrStr, highlight: false });
+      return;
+    }
+
+    // 배열은 "선언만 되어도" 메모리 적재를 보여주는게 핵심이라 항상 요소를 생성한다.
+    const elemType = spec.baseType;
+    const elemBytes = spec.elemBytes;
+    const dims = spec.dims;
+
+    const pushElem = (idxs) => {
+      const key = _arrayElemName(name, idxs);
+      const v = varState[key];
+      const val = (v && typeof v === 'object' && 'val' in v) ? v.val : (v !== undefined ? v : '???');
+      const lin = _linearIndexFromDims(idxs, dims);
+      const addr = baseAddrNum != null ? _formatHexAddr(baseAddrNum + lin * elemBytes) : '0x7fff????';
+      vars.push({ name: key, type: elemType, bytes: elemBytes, val, addr, highlight: false });
+    };
+
+    if (dims.length === 1) {
+      for (let i = 0; i < dims[0]; i++) pushElem([i]);
+    } else if (dims.length >= 2) {
+      for (let i = 0; i < dims[0]; i++) {
+        for (let j = 0; j < dims[1]; j++) pushElem([i, j]);
+      }
+    }
+  });
   if (vars.length === 0) return null;
   const totalBytes = vars.reduce((a, v) => a + v.bytes, 0) + 16;
   return {
@@ -698,12 +849,12 @@ function selectTopic(topicKey) {
     // 기준 주소는 임의의 상수에서 시작 (교육용이므로 상대적 위치만 중요)
     let base = 0x7fff5200;
     const auto = {};
-    names.forEach((name, idx) => {
-      // 변수마다 위쪽(큰 주소)로 쌓이도록 오프셋을 더해감
+    let offset = 0;
+    names.forEach((name) => {
       const type = t.varTypes[name];
       const bytes = getTypeBytes(type);
-      const addrVal = base + idx * bytes;
-      auto[name] = '0x' + addrVal.toString(16);
+      auto[name] = _formatHexAddr(base + offset);
+      offset += bytes;
     });
     t._autoBaseAddr = auto;
   }
