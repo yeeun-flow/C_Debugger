@@ -82,6 +82,8 @@
     decarray: {
       name: '01decarray.c',
       title: '배열 선언과 스택에의 적재',
+      /* printf("%d  ",…) 조각을 터미널처럼 한 줄로 이어 표시 */
+      outputConcat: true,
       varTypes: { 'score[0]': 'int', 'score[1]': 'int', 'score[2]': 'int', 'score[3]': 'int', 'score[4]': 'int', i: 'int' },
       concept: `<b>int score[SIZE];</b> — 연속된 <b>int × SIZE</b> 바이트가 스택(또는 지역 프레임)에 잡힙니다.<br>
 <b>초기화하지 않은 원소</b>에는 <b>쓰레기 값</b>이 들어 있을 수 있습니다(구현·빌드에 따라 다름).<br>
@@ -125,7 +127,7 @@
         { line: 'forh', type: 'exec', vars: { i: 4 }, explain: `i==4`, output: null, memViz: SM(SC(5, [78, 97, 85, '???', 91], null).concat([{ name: 'i', type: 'int', bytes: 4, val: 4, addr: '0x7fff5214', highlight: true }])) },
         { line: 'pr', type: 'exec', explain: `i==4`, output: '91  ' },
         { line: 'forh', type: 'exec', vars: { i: 5 }, explain: `i++ → 5, 조건 거짓 — 루프 종료.`, output: null, memViz: SM(SC(5, [78, 97, 85, '???', 91], null).concat([{ name: 'i', type: 'int', bytes: 4, val: 5, addr: '0x7fff5214', highlight: true }])) },
-        { line: 'nl', type: 'exec', explain: `printf("\\n") — 줄 바꿈.`, output: '' },
+        { line: 'nl', type: 'exec', explain: `printf("\\n") — 줄 바꿈.`, output: '\n' },
         { line: 'ret', type: 'exec', explain: `<b>return 0</b> — 프레임 해제.`, output: null, memViz: RET },
       ],
     },

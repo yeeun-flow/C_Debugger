@@ -76,6 +76,13 @@ function renderOutput(lines, emptyMsg) {
     area.innerHTML = `<span class="output-dim">${emptyMsg || '// 실행 결과가 여기 표시됩니다'}</span>`;
     return;
   }
+  const t = TOPICS[state.currentTopic];
+  if (t && t.outputConcat) {
+    const full = lines.map((l) => l.text).join('');
+    area.innerHTML = `<span style="color:var(--accent-y)">▶</span> <span style="white-space:pre-wrap;word-break:break-all">${escHtml(full)}</span>`;
+    area.scrollTop = area.scrollHeight;
+    return;
+  }
   area.innerHTML = lines.map((l, i) =>
     `<span class="output-line">${i === lines.length - 1 ? '<span style="color:var(--accent-y)">▶</span> ' : '  '}${escHtml(l.text)}</span>`
   ).join('\n');
@@ -160,7 +167,7 @@ function renderMemTable(topic, newVars) {
 //  RENDER OUTPUT (append / clear)
 // ══════════════════════════════════════════════════════════
 function appendOutput(text) {
-  if (!text) return;
+  if (text === undefined || text === null) return;
   if (state.currentTopic === 'triangle') {
     if (text === '*') {
       if (!state.triangleLineOpen || state.outputLines.length === 0) {
@@ -547,7 +554,7 @@ function stepForward() {
   if (state.stepIndex >= t.steps.length) return;
   const step = t.steps[state.stepIndex];
   state.stepIndex++;
-  if (step.output) appendOutput(step.output);
+  if (step.output != null) appendOutput(step.output);
   updateUI();
 }
 
@@ -558,7 +565,7 @@ function stepBack() {
   state.outputLines = [];
   const t = TOPICS[state.currentTopic];
   for (let i = 0; i < state.stepIndex; i++) {
-    if (t.steps[i].output) state.outputLines.push({ text: t.steps[i].output });
+    if (t.steps[i].output != null) state.outputLines.push({ text: t.steps[i].output });
   }
   renderOutput(state.outputLines, '// 실행 결과가 여기 표시됩니다');
 
@@ -582,7 +589,7 @@ function runAll() {
   while (state.stepIndex < t.steps.length) {
     const step = t.steps[state.stepIndex];
     state.stepIndex++;
-    if (step.output) state.outputLines.push({ text: step.output });
+    if (step.output != null) state.outputLines.push({ text: step.output });
     if (step.vars) {
       for (const k in step.vars) state.varState[k] = { val: step.vars[k], changed: false };
     }

@@ -229,7 +229,7 @@
     white-space: pre-wrap;
   }
   .output-dim { color: var(--text3); font-size: 11px; }
-  .output-line { display: block; }
+  .output-stream { white-space: pre-wrap; word-break: break-all; }
   .output-cur { color: var(--accent-y); }
 
   /* ── CONCEPT BANNER ── */
@@ -521,7 +521,7 @@ const STEPS = [
     explain: '<b>printf("\\n")</b> — 줄 바꿈 출력.',
     mem: null,
     vars: {},
-    output: '',
+    output: '\n',
   },
   {
     line: 'ret', type: 'exec',
@@ -667,11 +667,9 @@ function renderOutput() {
     area.innerHTML = '<span class="output-dim">// 실행 결과가 여기 표시됩니다</span>';
     return;
   }
-  area.innerHTML = outputLines.map((l, i) => {
-    const isCur = i === outputLines.length - 1;
-    const txt = escHtml(l);
-    return `<span class="output-line">${isCur ? '<span class="output-cur">▶ </span>' : '  '}${txt}</span>`;
-  }).join('\n');
+  /* printf("%d  ",…)는 stdout에 이어 붙으므로 조각을 한 줄(마지막 \n 전까지)로 합쳐 표시 */
+  const full = outputLines.join('');
+  area.innerHTML = `<span class="output-cur">▶ </span><span class="output-stream">${escHtml(full)}</span>`;
   area.scrollTop = area.scrollHeight;
 }
 
